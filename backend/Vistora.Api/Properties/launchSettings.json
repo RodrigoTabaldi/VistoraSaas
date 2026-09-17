@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "Vistora.Api": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:58689;http://localhost:58690"
+    }
+  }
+}

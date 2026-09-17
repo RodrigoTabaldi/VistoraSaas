@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="backend/Vistora.Domain/Vistora.Domain.csproj" />
+  <Project Path="backend/Vistora.Application/Vistora.Application.csproj" />
+  <Project Path="backend/Vistora.Infrastructure/Vistora.Infrastructure.csproj" />
+  <Project Path="backend/Vistora.Api/Vistora.Api.csproj" />
+  <Project Path="backend/Vistora.Worker/Vistora.Worker.csproj" />
+  <Project Path="backend/Vistora.Tests/Vistora.Tests.csproj" />
+</Solution>
