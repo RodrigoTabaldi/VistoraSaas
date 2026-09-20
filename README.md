@@ -74,6 +74,18 @@ O adaptador está em `backend/Vistora.Infrastructure/Storage/S3/`. Ele expõe `I
 - API: `GET /health`, provido pelo health check do ASP.NET Core.
 - Worker: o `WorkerReadinessHealthCheck` é executado no startup. Falha de health impede o processo de iniciar; sucesso é registrado no log.
 
+## API, cache e mensageria
+
+- O backend expõe propriedades, unidades, vistorias, cômodos, itens, evidências e relatórios em `/api/v1`. Uploads usam `multipart/form-data` com o campo `file`.
+- Com OIDC configurado, envie um JWT com a claim `organization_id` (ou `tenant_id`/`org_id`); os endpoints de negócio exigem autenticação. Em Development sem Authority, o fallback local é o header `X-Organization-Id`.
+- Atualizações de itens e mudanças de status exigem `rowVersion`, evitando sobrescrever alterações concorrentes. O ciclo de status é `Draft -> Completed -> Approved`.
+- `POST /api/v1/messages` publica um envelope JSON durável na fila RabbitMQ configurada em `Messaging:RabbitMq:QueueName`.
+- O Worker consome a fila com confirmação manual (`ACK`) e reprocessa mensagens que falharem (`NACK` com requeue).
+- Mensagens processadas ficam no Redis por uma hora na chave `vistora:message:{id}`. Esse fluxo é operacional e não grava no PostgreSQL.
+- O endpoint `GET /health` verifica Redis e RabbitMQ, além dos checks registrados pela aplicação.
+
+O endpoint de mensagens é uma fundação técnica para casos de uso futuros; ele ainda não substitui um outbox transacional, que deverá ser avaliado quando houver eventos de domínio persistidos. Nenhuma migration ou alteração de schema é necessária para esta etapa.
+
 ## Nota sobre o template legado
 
 Os arquivos padrão existentes na raiz (`Vistora.csproj`, `Program.cs` etc.) foram preservados para evitar remoção não solicitada. O `Vistora.slnx` foi atualizado e é a solution ativa, usando exclusivamente os projetos em `backend/`.

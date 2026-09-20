@@ -8,6 +8,7 @@ services:
       ConnectionStrings__Postgres: ${VISTORA_POSTGRES_CONNECTION:-}
       ConnectionStrings__Redis: ${VISTORA_REDIS_CONNECTION:-}
       ConnectionStrings__RabbitMq: ${VISTORA_RABBITMQ_CONNECTION:-}
+      Messaging__RabbitMq__QueueName: ${VISTORA_RABBITMQ_QUEUE:-vistora.messages}
       Storage__S3__Endpoint: ${VISTORA_STORAGE_S3_ENDPOINT:-}
       Storage__S3__Region: ${VISTORA_STORAGE_S3_REGION:-}
       Storage__S3__Bucket: ${VISTORA_STORAGE_S3_BUCKET:-}
@@ -31,6 +32,7 @@ services:
       ConnectionStrings__Postgres: ${VISTORA_POSTGRES_CONNECTION:-}
       ConnectionStrings__Redis: ${VISTORA_REDIS_CONNECTION:-}
       ConnectionStrings__RabbitMq: ${VISTORA_RABBITMQ_CONNECTION:-}
+      Messaging__RabbitMq__QueueName: ${VISTORA_RABBITMQ_QUEUE:-vistora.messages}
       Storage__S3__Endpoint: ${VISTORA_STORAGE_S3_ENDPOINT:-}
       Storage__S3__Region: ${VISTORA_STORAGE_S3_REGION:-}
       Storage__S3__Bucket: ${VISTORA_STORAGE_S3_BUCKET:-}

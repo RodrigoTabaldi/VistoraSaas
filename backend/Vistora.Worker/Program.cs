@@ -11,6 +11,7 @@ builder.Services
 builder.Services.AddHealthChecks().AddCheck<WorkerReadinessHealthCheck>("worker_readiness");
 builder.Services.AddHostedService<HealthCheckStartupService>();
 builder.Services.AddHostedService<Worker>();
+builder.Services.AddHostedService<MessageConsumerWorker>();
 
 var host = builder.Build();
 await host.RunAsync();
