@@ -6,7 +6,7 @@ namespace Vistora.Infrastructure.Persistence.PostgreSql;
 
 public sealed class VistoraDbContext(
     DbContextOptions<VistoraDbContext> options,
-    ITenantContext tenantContext) : DbContext(options)
+    ITenantContext tenantContext) : DbContext(options), IVistoraDbContext
 {
     private readonly ITenantContext _tenantContext = tenantContext;
     private Guid? CurrentOrganizationId => _tenantContext.OrganizationId;
@@ -22,6 +22,7 @@ public sealed class VistoraDbContext(
     public DbSet<Evidence> Evidence => Set<Evidence>();
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
+    public DbSet<ReportJob> ReportJobs => Set<ReportJob>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -37,6 +38,7 @@ public sealed class VistoraDbContext(
         ConfigureTenantEntity<Evidence>(modelBuilder, "evidence");
         ConfigureTenantEntity<Report>(modelBuilder, "reports");
         ConfigureTenantEntity<AuditEvent>(modelBuilder, "audit_events");
+        ConfigureTenantEntity<ReportJob>(modelBuilder, "report_jobs");
         ConfigureRowVersionedEntities(modelBuilder);
 
         modelBuilder.Entity<User>(entity =>
@@ -105,6 +107,17 @@ public sealed class VistoraDbContext(
             entity.Property(x => x.EntityId).HasMaxLength(128).IsRequired();
             entity.Property(x => x.CorrelationId).HasMaxLength(128);
             entity.HasIndex(x => new { x.OrganizationId, x.OccurredAtUtc });
+        });
+        modelBuilder.Entity<ReportJob>(entity =>
+        {
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
+            entity.Property(x => x.IdempotencyKey).HasMaxLength(256).IsRequired();
+            entity.HasOne(x => x.Inspection).WithMany().HasForeignKey(x => x.InspectionId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.ResultReport).WithMany().HasForeignKey(x => x.ResultReportId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(x => new { x.OrganizationId, x.InspectionId })
+                .IsUnique()
+                .HasFilter("\"Status\" IN ('Pending', 'Processing')");
+            entity.HasIndex(x => new { x.OrganizationId, x.IdempotencyKey }).IsUnique();
         });
     }
 

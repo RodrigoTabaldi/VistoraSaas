@@ -154,3 +154,43 @@ public sealed class AuditEvent : IOrganizationScoped
     public string? CorrelationId { get; set; }
     public DateTimeOffset OccurredAtUtc { get; set; }
 }
+
+public sealed class ReportJob : IOrganizationScoped, IRowVersioned
+{
+    public Guid Id { get; set; }
+    public Guid OrganizationId { get; set; }
+    public Guid InspectionId { get; set; }
+
+    /// <summary>
+    /// Client/API-supplied idempotency key for THIS job creation, distinct from the Redis-backed
+    /// HTTP-level Idempotency-Key. Guarantees at most one non-terminal job per Inspection even if
+    /// "conclude inspection" is called twice concurrently - enforced by the unique partial index
+    /// below, not by this field's uniqueness alone.
+    /// </summary>
+    public required string IdempotencyKey { get; set; }
+
+    public ReportJobStatus Status { get; set; }
+    public int Attempts { get; set; }
+    public int MaxAttempts { get; set; }
+    public string? ErrorMessage { get; set; }
+
+    /// <summary>Set when the job completes successfully; points at the Report version it produced.</summary>
+    public Guid? ResultReportId { get; set; }
+
+    public DateTimeOffset CreatedAtUtc { get; set; }
+    public DateTimeOffset? StartedAtUtc { get; set; }
+    public DateTimeOffset? CompletedAtUtc { get; set; }
+    public uint RowVersion { get; set; }
+
+    public Inspection? Inspection { get; set; }
+    public Report? ResultReport { get; set; }
+}
+
+public enum ReportJobStatus
+{
+    Pending = 1,
+    Processing = 2,
+    Completed = 3,
+    Failed = 4
+}
+

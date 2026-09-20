@@ -1,3 +1,5 @@
+using Vistora.Api.Endpoints;
+using Vistora.Api.Middleware;
 using Vistora.Application;
 using Vistora.Infrastructure;
 
@@ -10,7 +12,10 @@ builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
+app.UseMiddleware<DevOnlyTenantResolutionMiddleware>();
+
 app.MapHealthChecks("/health");
+app.MapInspectionsEndpoints();
 
 app.Run();
 

@@ -3,9 +3,17 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using RabbitMQ.Client;
+using StackExchange.Redis;
+using Vistora.Application.Idempotency;
+using Vistora.Application.Messaging;
 using Vistora.Application.Persistence;
+using Vistora.Application.Reporting;
 using Vistora.Application.Storage;
+using Vistora.Infrastructure.Idempotency;
+using Vistora.Infrastructure.Messaging;
 using Vistora.Infrastructure.Persistence.PostgreSql;
+using Vistora.Infrastructure.Reporting;
 using Vistora.Infrastructure.Storage.S3;
 
 namespace Vistora.Infrastructure;
@@ -34,6 +42,7 @@ public static class DependencyInjection
                     serviceProvider.GetRequiredService<TenantSessionConnectionInterceptor>(),
                     serviceProvider.GetRequiredService<TenantTransactionInterceptor>(),
                     serviceProvider.GetRequiredService<TenantCommandInterceptor>()));
+        services.AddScoped<IVistoraDbContext>(sp => sp.GetRequiredService<VistoraDbContext>());
 
         services
             .AddOptions<S3StorageOptions>()
@@ -41,6 +50,30 @@ public static class DependencyInjection
         services.AddSingleton<IValidateOptions<S3StorageOptions>, S3StorageOptionsValidator>();
         services.AddSingleton<IAmazonS3>(SupabaseS3ClientFactory.Create);
         services.AddSingleton<IPrivateObjectStorage, SupabaseS3ObjectStorage>();
+        services.AddSingleton<IReportPdfGenerator, PlaceholderReportPdfGenerator>();
+
+        var redisConnectionString = configuration.GetConnectionString("Redis");
+        if (string.IsNullOrWhiteSpace(redisConnectionString))
+        {
+            throw new InvalidOperationException("ConnectionStrings:Redis must be configured.");
+        }
+
+        services.AddSingleton<IConnectionMultiplexer>(
+            _ => ConnectionMultiplexer.Connect(redisConnectionString));
+        services.AddSingleton<IIdempotencyStore, RedisIdempotencyStore>();
+        services.AddScoped<IdempotencyGuard>();
+
+        var rabbitConnectionString = configuration.GetConnectionString("RabbitMq");
+        if (string.IsNullOrWhiteSpace(rabbitConnectionString))
+        {
+            throw new InvalidOperationException("ConnectionStrings:RabbitMq must be configured.");
+        }
+
+        services.AddSingleton<IConnectionFactory>(_ => new ConnectionFactory
+        {
+            Uri = new Uri(rabbitConnectionString)
+        });
+        services.AddSingleton<IReportJobPublisher, RabbitMqReportJobPublisher>();
 
         return services;
     }
