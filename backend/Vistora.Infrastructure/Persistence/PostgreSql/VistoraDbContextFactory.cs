@@ -9,7 +9,7 @@ public sealed class VistoraDbContextFactory : IDesignTimeDbContextFactory<Vistor
     public VistoraDbContext CreateDbContext(string[] args)
     {
         var options = new DbContextOptionsBuilder<VistoraDbContext>()
-            .UseNpgsql("Host=localhost;Database=vistora;Username=vistora;Password=design-time-only")
+            .UseNpgsql("Host=localhost;Database=vistora;Username=vistora;Password=change-me")
             .Options;
 
         return new VistoraDbContext(options, new TenantContext());

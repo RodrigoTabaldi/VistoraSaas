@@ -26,12 +26,14 @@ public static class DependencyInjection
         services.AddScoped<ITenantContext>(serviceProvider => serviceProvider.GetRequiredService<TenantContext>());
         services.AddScoped<TenantSessionConnectionInterceptor>();
         services.AddScoped<TenantTransactionInterceptor>();
+        services.AddScoped<TenantCommandInterceptor>();
         services.AddDbContext<VistoraDbContext>((serviceProvider, options) =>
             options
                 .UseNpgsql(connectionString)
                 .AddInterceptors(
                     serviceProvider.GetRequiredService<TenantSessionConnectionInterceptor>(),
-                    serviceProvider.GetRequiredService<TenantTransactionInterceptor>()));
+                    serviceProvider.GetRequiredService<TenantTransactionInterceptor>(),
+                    serviceProvider.GetRequiredService<TenantCommandInterceptor>()));
 
         services
             .AddOptions<S3StorageOptions>()
