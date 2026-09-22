@@ -16,6 +16,7 @@ app.UseMiddleware<DevOnlyTenantResolutionMiddleware>();
 
 app.MapHealthChecks("/health");
 app.MapInspectionsEndpoints();
+app.MapChecklistTemplatesEndpoints();
 
 app.Run();
 

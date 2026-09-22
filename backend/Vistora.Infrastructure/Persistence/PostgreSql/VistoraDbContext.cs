@@ -23,6 +23,8 @@ public sealed class VistoraDbContext(
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<ReportJob> ReportJobs => Set<ReportJob>();
+    public DbSet<ChecklistTemplateRoom> ChecklistTemplateRooms => Set<ChecklistTemplateRoom>();
+    public DbSet<ChecklistTemplateItem> ChecklistTemplateItems => Set<ChecklistTemplateItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -32,6 +34,8 @@ public sealed class VistoraDbContext(
         ConfigureTenantEntity<Property>(modelBuilder, "properties");
         ConfigureTenantEntity<Unit>(modelBuilder, "units");
         ConfigureTenantEntity<ChecklistTemplate>(modelBuilder, "checklist_templates");
+        ConfigureTenantEntity<ChecklistTemplateRoom>(modelBuilder, "checklist_template_rooms");
+        ConfigureTenantEntity<ChecklistTemplateItem>(modelBuilder, "checklist_template_items");
         ConfigureTenantEntity<Inspection>(modelBuilder, "inspections");
         ConfigureTenantEntity<InspectionRoom>(modelBuilder, "inspection_rooms");
         ConfigureTenantEntity<InspectionItem>(modelBuilder, "inspection_items");
@@ -59,6 +63,18 @@ public sealed class VistoraDbContext(
             entity.HasOne(x => x.Property).WithMany(x => x.Units).HasForeignKey(x => x.PropertyId).OnDelete(DeleteBehavior.Restrict);
         });
         modelBuilder.Entity<ChecklistTemplate>(entity => entity.Property(x => x.Name).HasMaxLength(200).IsRequired());
+        modelBuilder.Entity<ChecklistTemplateRoom>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            entity.HasIndex(x => new { x.OrganizationId, x.ChecklistTemplateId, x.Position }).IsUnique();
+            entity.HasOne(x => x.Template).WithMany(x => x.Rooms).HasForeignKey(x => x.ChecklistTemplateId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<ChecklistTemplateItem>(entity =>
+        {
+            entity.Property(x => x.Description).HasMaxLength(1000).IsRequired();
+            entity.HasIndex(x => new { x.OrganizationId, x.ChecklistTemplateRoomId, x.Position }).IsUnique();
+            entity.HasOne(x => x.Room).WithMany(x => x.Items).HasForeignKey(x => x.ChecklistTemplateRoomId).OnDelete(DeleteBehavior.Cascade);
+        });
         modelBuilder.Entity<Inspection>(entity =>
         {
             entity.Property(x => x.Type).HasConversion<string>().HasMaxLength(32).IsRequired();

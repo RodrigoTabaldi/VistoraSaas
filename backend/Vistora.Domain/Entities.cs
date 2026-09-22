@@ -56,6 +56,7 @@ public sealed class ChecklistTemplate : IOrganizationScoped
     public required string Name { get; set; }
     public bool IsActive { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
+    public ICollection<ChecklistTemplateRoom> Rooms { get; } = new List<ChecklistTemplateRoom>();
 }
 
 public sealed class Inspection : IOrganizationScoped, IRowVersioned
@@ -193,4 +194,28 @@ public enum ReportJobStatus
     Completed = 3,
     Failed = 4
 }
+
+public sealed class ChecklistTemplateRoom : IOrganizationScoped, IRowVersioned
+{
+    public Guid Id { get; set; }
+    public Guid OrganizationId { get; set; }
+    public Guid ChecklistTemplateId { get; set; }
+    public required string Name { get; set; }
+    public int Position { get; set; }
+    public uint RowVersion { get; set; }
+    public ChecklistTemplate? Template { get; set; }
+    public ICollection<ChecklistTemplateItem> Items { get; } = new List<ChecklistTemplateItem>();
+}
+
+public sealed class ChecklistTemplateItem : IOrganizationScoped, IRowVersioned
+{
+    public Guid Id { get; set; }
+    public Guid OrganizationId { get; set; }
+    public Guid ChecklistTemplateRoomId { get; set; }
+    public required string Description { get; set; }
+    public int Position { get; set; }
+    public uint RowVersion { get; set; }
+    public ChecklistTemplateRoom? Room { get; set; }
+}
+
 

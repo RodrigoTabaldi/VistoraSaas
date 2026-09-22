@@ -10,6 +10,8 @@ public static class DependencyInjection
     {
         services.AddScoped<CompleteInspectionUseCase>();
         services.AddScoped<ReportJobProcessor>();
+        services.AddScoped<CreateChecklistTemplateUseCase>();
+        services.AddScoped<CreateInspectionFromTemplateUseCase>();
         return services;
     }
 }
