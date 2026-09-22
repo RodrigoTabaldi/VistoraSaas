@@ -6,7 +6,7 @@ namespace Vistora.Infrastructure.Persistence.PostgreSql;
 
 public sealed class VistoraDbContext(
     DbContextOptions<VistoraDbContext> options,
-    ITenantContext tenantContext) : DbContext(options)
+    ITenantContext tenantContext) : DbContext(options), IVistoraDbContext
 {
     private readonly ITenantContext _tenantContext = tenantContext;
     private Guid? CurrentOrganizationId => _tenantContext.OrganizationId;
@@ -22,6 +22,9 @@ public sealed class VistoraDbContext(
     public DbSet<Evidence> Evidence => Set<Evidence>();
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
+    public DbSet<ReportJob> ReportJobs => Set<ReportJob>();
+    public DbSet<ChecklistTemplateRoom> ChecklistTemplateRooms => Set<ChecklistTemplateRoom>();
+    public DbSet<ChecklistTemplateItem> ChecklistTemplateItems => Set<ChecklistTemplateItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -31,12 +34,15 @@ public sealed class VistoraDbContext(
         ConfigureTenantEntity<Property>(modelBuilder, "properties");
         ConfigureTenantEntity<Unit>(modelBuilder, "units");
         ConfigureTenantEntity<ChecklistTemplate>(modelBuilder, "checklist_templates");
+        ConfigureTenantEntity<ChecklistTemplateRoom>(modelBuilder, "checklist_template_rooms");
+        ConfigureTenantEntity<ChecklistTemplateItem>(modelBuilder, "checklist_template_items");
         ConfigureTenantEntity<Inspection>(modelBuilder, "inspections");
         ConfigureTenantEntity<InspectionRoom>(modelBuilder, "inspection_rooms");
         ConfigureTenantEntity<InspectionItem>(modelBuilder, "inspection_items");
         ConfigureTenantEntity<Evidence>(modelBuilder, "evidence");
         ConfigureTenantEntity<Report>(modelBuilder, "reports");
         ConfigureTenantEntity<AuditEvent>(modelBuilder, "audit_events");
+        ConfigureTenantEntity<ReportJob>(modelBuilder, "report_jobs");
         ConfigureRowVersionedEntities(modelBuilder);
 
         modelBuilder.Entity<User>(entity =>
@@ -57,6 +63,18 @@ public sealed class VistoraDbContext(
             entity.HasOne(x => x.Property).WithMany(x => x.Units).HasForeignKey(x => x.PropertyId).OnDelete(DeleteBehavior.Restrict);
         });
         modelBuilder.Entity<ChecklistTemplate>(entity => entity.Property(x => x.Name).HasMaxLength(200).IsRequired());
+        modelBuilder.Entity<ChecklistTemplateRoom>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            entity.HasIndex(x => new { x.OrganizationId, x.ChecklistTemplateId, x.Position }).IsUnique();
+            entity.HasOne(x => x.Template).WithMany(x => x.Rooms).HasForeignKey(x => x.ChecklistTemplateId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<ChecklistTemplateItem>(entity =>
+        {
+            entity.Property(x => x.Description).HasMaxLength(1000).IsRequired();
+            entity.HasIndex(x => new { x.OrganizationId, x.ChecklistTemplateRoomId, x.Position }).IsUnique();
+            entity.HasOne(x => x.Room).WithMany(x => x.Items).HasForeignKey(x => x.ChecklistTemplateRoomId).OnDelete(DeleteBehavior.Cascade);
+        });
         modelBuilder.Entity<Inspection>(entity =>
         {
             entity.Property(x => x.Type).HasConversion<string>().HasMaxLength(32).IsRequired();
@@ -105,6 +123,17 @@ public sealed class VistoraDbContext(
             entity.Property(x => x.EntityId).HasMaxLength(128).IsRequired();
             entity.Property(x => x.CorrelationId).HasMaxLength(128);
             entity.HasIndex(x => new { x.OrganizationId, x.OccurredAtUtc });
+        });
+        modelBuilder.Entity<ReportJob>(entity =>
+        {
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
+            entity.Property(x => x.IdempotencyKey).HasMaxLength(256).IsRequired();
+            entity.HasOne(x => x.Inspection).WithMany().HasForeignKey(x => x.InspectionId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.ResultReport).WithMany().HasForeignKey(x => x.ResultReportId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(x => new { x.OrganizationId, x.InspectionId })
+                .IsUnique()
+                .HasFilter("\"Status\" IN ('Pending', 'Processing')");
+            entity.HasIndex(x => new { x.OrganizationId, x.IdempotencyKey }).IsUnique();
         });
     }
 

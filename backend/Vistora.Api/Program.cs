@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Vistora.Api;
+using Vistora.Api.Endpoints;
+using Vistora.Api.Middleware;
 using Vistora.Application;
 using Vistora.Application.Messaging;
 using Vistora.Infrastructure;
@@ -27,23 +29,33 @@ if (!string.IsNullOrWhiteSpace(authority))
 var app = builder.Build();
 
 app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
-{
-    var exception = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
-    context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-    await Results.Problem(
-        detail: app.Environment.IsDevelopment() ? exception?.Message : "An unexpected error occurred.",
-        statusCode: StatusCodes.Status500InternalServerError,
-        title: "Request failed").ExecuteAsync(context);
-}));
+  {
+      var exception = context.Features
+          .Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?
+          .Error;
 
-app.UseMiddleware<TenantResolutionMiddleware>();
-if (!string.IsNullOrWhiteSpace(authority))
-{
-    app.UseAuthentication();
-    app.UseAuthorization();
-}
+      context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+
+      await Results.Problem(
+          detail: app.Environment.IsDevelopment()
+              ? exception?.Message
+              : "An unexpected error occurred.",
+          statusCode: StatusCodes.Status500InternalServerError,
+          title: "Request failed")
+          .ExecuteAsync(context);
+  }));
+
+  app.UseMiddleware<TenantResolutionMiddleware>();
+
+  if (!string.IsNullOrWhiteSpace(authority))
+  {
+      app.UseAuthentication();
+      app.UseAuthorization();
+  }
 
 app.MapHealthChecks("/health");
+app.MapInspectionsEndpoints();
+app.MapChecklistTemplatesEndpoints();
 
 var messages = app.MapGroup("/api/v1/messages");
 if (!string.IsNullOrWhiteSpace(authority)) messages.RequireAuthorization();

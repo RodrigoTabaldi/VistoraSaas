@@ -1,6 +1,0 @@
-@Vistora_HostAddress = http://localhost:5002
-
-GET {{Vistora_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

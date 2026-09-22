@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Vistora.Infrastructure.Persistence.PostgreSql;
@@ -11,9 +12,11 @@ using Vistora.Infrastructure.Persistence.PostgreSql;
 namespace Vistora.Infrastructure.Persistence.PostgreSql.Migrations
 {
     [DbContext(typeof(VistoraDbContext))]
-    partial class VistoraDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260920163048_AddReportJob")]
+    partial class AddReportJob
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -93,84 +96,6 @@ namespace Vistora.Infrastructure.Persistence.PostgreSql.Migrations
                     b.HasIndex("OrganizationId");
 
                     b.ToTable("checklist_templates", "vistora");
-                });
-
-            modelBuilder.Entity("Vistora.Domain.ChecklistTemplateItem", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ChecklistTemplateRoomId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<Guid>("OrganizationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("organization_id");
-
-                    b.Property<int>("Position")
-                        .HasColumnType("integer");
-
-                    b.Property<uint>("RowVersion")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ChecklistTemplateRoomId");
-
-                    b.HasIndex("OrganizationId");
-
-                    b.HasIndex("OrganizationId", "ChecklistTemplateRoomId", "Position")
-                        .IsUnique();
-
-                    b.ToTable("checklist_template_items", "vistora");
-                });
-
-            modelBuilder.Entity("Vistora.Domain.ChecklistTemplateRoom", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ChecklistTemplateId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<Guid>("OrganizationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("organization_id");
-
-                    b.Property<int>("Position")
-                        .HasColumnType("integer");
-
-                    b.Property<uint>("RowVersion")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ChecklistTemplateId");
-
-                    b.HasIndex("OrganizationId");
-
-                    b.HasIndex("OrganizationId", "ChecklistTemplateId", "Position")
-                        .IsUnique();
-
-                    b.ToTable("checklist_template_rooms", "vistora");
                 });
 
             modelBuilder.Entity("Vistora.Domain.Evidence", b =>
@@ -594,28 +519,6 @@ namespace Vistora.Infrastructure.Persistence.PostgreSql.Migrations
                     b.ToTable("users", "vistora");
                 });
 
-            modelBuilder.Entity("Vistora.Domain.ChecklistTemplateItem", b =>
-                {
-                    b.HasOne("Vistora.Domain.ChecklistTemplateRoom", "Room")
-                        .WithMany("Items")
-                        .HasForeignKey("ChecklistTemplateRoomId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Room");
-                });
-
-            modelBuilder.Entity("Vistora.Domain.ChecklistTemplateRoom", b =>
-                {
-                    b.HasOne("Vistora.Domain.ChecklistTemplate", "Template")
-                        .WithMany("Rooms")
-                        .HasForeignKey("ChecklistTemplateId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Template");
-                });
-
             modelBuilder.Entity("Vistora.Domain.Evidence", b =>
                 {
                     b.HasOne("Vistora.Domain.InspectionItem", "InspectionItem")
@@ -734,16 +637,6 @@ namespace Vistora.Infrastructure.Persistence.PostgreSql.Migrations
                         .IsRequired();
 
                     b.Navigation("Organization");
-                });
-
-            modelBuilder.Entity("Vistora.Domain.ChecklistTemplate", b =>
-                {
-                    b.Navigation("Rooms");
-                });
-
-            modelBuilder.Entity("Vistora.Domain.ChecklistTemplateRoom", b =>
-                {
-                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("Vistora.Domain.Inspection", b =>
