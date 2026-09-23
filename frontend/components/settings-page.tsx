@@ -1,0 +1,14 @@
+'use client';
+
+import { useState } from 'react';
+import { Icon } from './icons';
+import { PageHeading, PanelHeader } from './dashboard-primitives';
+import { useWorkspace } from '../lib/workspace-store';
+
+export function SettingsPage() {
+  const { settings, updateSettings } = useWorkspace();
+  const [saved, setSaved] = useState(false);
+  const [companyName, setCompanyName] = useState(settings.companyName); const [document, setDocument] = useState(settings.document); const [email, setEmail] = useState(settings.email);
+  function save(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); updateSettings({ companyName, document, email }); setSaved(true); window.setTimeout(() => setSaved(false), 2200); }
+  return <><PageHeading title="Configurações" description="Ajuste os parâmetros da organização, notificações e geração de relatórios." /><div className="settings-layout"><form className="panel settings-form" onSubmit={save}><PanelHeader title="Dados da organização" /><div className="form-grid"><label className="form-field form-field--full"><span>Nome da organização</span><input value={companyName} onChange={(event) => setCompanyName(event.target.value)} required /></label><label className="form-field"><span>CNPJ</span><input value={document} onChange={(event) => setDocument(event.target.value)} /></label><label className="form-field"><span>E-mail operacional</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label></div><div className="settings-toggle"><div><strong>Notificações de triagem</strong><span>Receba alertas sobre agenda e conclusão.</span></div><input type="checkbox" checked={settings.notifications} onChange={(event) => updateSettings({ notifications: event.target.checked })} /></div><div className="settings-toggle"><div><strong>Gerar relatório automaticamente</strong><span>Crie o job de relatório ao concluir uma triagem.</span></div><input type="checkbox" checked={settings.autoReports} onChange={(event) => updateSettings({ autoReports: event.target.checked })} /></div><div className="form-actions"><span className="form-feedback form-feedback--success" aria-live="polite">{saved ? 'Configurações salvas.' : ''}</span><button className="button button--primary" type="submit"><Icon name="check" size={16} /> Salvar alterações</button></div></form><aside className="settings-nav panel"><PanelHeader title="Preferências" /><button className="settings-nav-item active" type="button"><Icon name="settings" size={17} /> Organização</button><button className="settings-nav-item" type="button"><Icon name="clipboard" size={17} /> Templates de checklist</button><button className="settings-nav-item" type="button"><Icon name="shield" size={17} /> Segurança e acesso</button><div className="settings-note"><Icon name="shield" size={18} /><span><strong>Dados protegidos</strong>As evidências da vistoria ficam em armazenamento privado.</span></div></aside></div></>;
+}

@@ -1,5 +1,5 @@
-import { ComingSoonPage } from '../../../components/coming-soon';
+import { PropertiesPage } from '../../../components/properties-page';
 
-export default function PropertiesPage() {
-  return <ComingSoonPage title="Imóveis" description="Centralize os imóveis, unidades e históricos de inspeção da sua operação." icon="building" />;
+export default function PropertiesRoute() {
+  return <PropertiesPage />;
 }

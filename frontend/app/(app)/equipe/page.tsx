@@ -1,5 +1,5 @@
-import { ComingSoonPage } from '../../../components/coming-soon';
+import { TeamPage } from '../../../components/team-page';
 
-export default function TeamPage() {
-  return <ComingSoonPage title="Equipe" description="Gerencie vistoriadores, permissões e responsabilidades por operação." icon="users" />;
+export default function TeamRoute() {
+  return <TeamPage />;
 }

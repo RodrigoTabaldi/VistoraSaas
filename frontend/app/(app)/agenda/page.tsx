@@ -1,5 +1,5 @@
-import { ComingSoonPage } from '../../../components/coming-soon';
+import { AgendaPage } from '../../../components/agenda-page';
 
-export default function AgendaPage() {
-  return <ComingSoonPage title="Agenda" description="Organize a agenda dos vistoriadores e acompanhe os próximos compromissos." icon="calendar" />;
+export default function AgendaRoute() {
+  return <AgendaPage />;
 }

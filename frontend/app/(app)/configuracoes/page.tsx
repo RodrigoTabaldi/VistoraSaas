@@ -1,5 +1,5 @@
-import { ComingSoonPage } from '../../../components/coming-soon';
+import { SettingsPage } from '../../../components/settings-page';
 
-export default function SettingsPage() {
-  return <ComingSoonPage title="Configurações" description="Ajuste os parâmetros da organização, templates de checklist e integrações." icon="settings" />;
+export default function SettingsRoute() {
+  return <SettingsPage />;
 }

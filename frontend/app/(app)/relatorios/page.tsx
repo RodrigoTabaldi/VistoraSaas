@@ -1,5 +1,5 @@
-import { ComingSoonPage } from '../../../components/coming-soon';
+import { ReportsPage } from '../../../components/reports-page';
 
-export default function ReportsPage() {
-  return <ComingSoonPage title="Relatórios" description="Gere e acompanhe os laudos de vistoria em PDF com rastreabilidade." icon="file" />;
+export default function ReportsRoute() {
+  return <ReportsPage />;
 }
