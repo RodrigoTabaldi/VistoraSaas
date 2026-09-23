@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { Icon, type IconName } from './icons';
-import { VistoraLogo } from './logo';
 
 const navigation: Array<{ href: string; label: string; icon: IconName }> = [
   { href: '/dashboard', label: 'Home', icon: 'home' },
@@ -24,7 +23,11 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
   return (
     <div className="app-shell">
       <aside className={`sidebar ${sidebarOpen ? 'sidebar--open' : ''}`}>
-        <div className="sidebar-brand"><VistoraLogo light /></div>
+        <div className="sidebar-brand">
+          <div className="sidebar-brand-image" aria-label="Vistora">
+            <img src="/logo.jpeg" alt="Vistora" />
+          </div>
+        </div>
         <nav className="sidebar-nav" aria-label="Navegação principal">
           {navigation.map((item) => {
             const isActive = item.href === '/dashboard' ? pathname === item.href : pathname.startsWith(item.href);
