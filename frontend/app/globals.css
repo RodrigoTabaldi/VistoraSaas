@@ -56,21 +56,26 @@ button { cursor: pointer; }
 .vistora-logo {
   display: inline-flex;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
   color: var(--green-900);
 }
 
-.vistora-logo__mark { width: 39px; height: 44px; flex: 0 0 auto; }
-.vistora-logo__word { font-size: 27px; font-weight: 760; letter-spacing: -0.8px; }
+.vistora-logo__mark { width: 41px; height: 44px; flex: 0 0 auto; }
+.vistora-logo__word { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
 .vistora-logo--light { color: #fff; }
 .vistora-logo--compact .vistora-logo__mark { width: 42px; height: 47px; }
+
+button:focus-visible, a:focus-visible, input:focus-visible {
+  outline: 3px solid rgba(20, 200, 139, .42);
+  outline-offset: 3px;
+}
 
 /* Login */
 .login-page {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(420px, 1.02fr) minmax(530px, 0.98fr);
-  background: #f9fbfb;
+  grid-template-columns: minmax(440px, 1.04fr) minmax(540px, .96fr);
+  background: #f5f9f8;
 }
 
 .login-hero {
@@ -78,28 +83,35 @@ button { cursor: pointer; }
   min-height: 760px;
   overflow: hidden;
   color: #fff;
-  background:
-    linear-gradient(90deg, rgba(0, 57, 47, 0.98) 0%, rgba(0, 69, 57, 0.86) 44%, rgba(5, 59, 54, 0.58) 100%),
-    linear-gradient(160deg, #176c62 0%, #0a423c 52%, #062b2a 100%);
+  isolation: isolate;
+  background: #06372f;
+}
+
+.login-hero-media {
+  position: absolute;
+  z-index: -3;
+  inset: 0;
+  background: url('/vistora-login-property.png') center center / cover no-repeat;
+  animation: login-image-drift 18s ease-in-out infinite alternate;
+  transform: scale(1.04);
 }
 
 .login-hero::before {
   content: '';
   position: absolute;
+  z-index: -2;
   inset: 0;
-  opacity: .7;
   background:
-    linear-gradient(132deg, transparent 0 42%, rgba(225, 235, 228, .22) 42.2% 43%, transparent 43.2%),
-    linear-gradient(164deg, transparent 0 52%, rgba(215, 232, 221, .13) 52.3% 57%, transparent 57.2%),
-    linear-gradient(90deg, transparent 0 62%, rgba(0, 23, 25, .27) 62% 100%);
-  transform: scale(1.15);
+    linear-gradient(90deg, rgba(2, 47, 39, .93) 0%, rgba(2, 54, 44, .72) 43%, rgba(2, 44, 40, .22) 100%),
+    linear-gradient(0deg, rgba(0, 24, 26, .72) 0%, rgba(0, 24, 26, .06) 56%, rgba(0, 24, 26, .2) 100%);
 }
 
 .login-hero::after {
   content: '';
   position: absolute;
+  z-index: -1;
   inset: 0;
-  background: radial-gradient(circle at 73% 32%, rgba(255,255,255,.16), transparent 23%), linear-gradient(180deg, transparent 55%, rgba(0, 28, 27, .7));
+  background: radial-gradient(circle at 75% 18%, rgba(164, 244, 214, .18), transparent 24%);
   pointer-events: none;
 }
 
@@ -110,19 +122,21 @@ button { cursor: pointer; }
   min-height: 760px;
   display: flex;
   flex-direction: column;
-  padding: 64px clamp(36px, 7vw, 82px) 44px;
+  padding: 48px clamp(36px, 6vw, 82px) 40px;
 }
 
 .login-hero .vistora-logo { color: #fff; }
 .login-hero .vistora-logo__word { font-size: 42px; letter-spacing: -1.7px; }
-.login-hero .vistora-logo__mark { width: 54px; height: 61px; }
+.login-hero .vistora-logo__mark { width: 56px; height: 62px; }
 
-.login-hero-copy { margin-top: auto; max-width: 650px; padding-bottom: 24px; }
-.accent-line { width: 46px; height: 6px; border-radius: 9px; background: #14c88b; margin-bottom: 32px; }
+.login-hero-copy { margin-top: auto; max-width: 650px; padding-bottom: 24px; animation: login-copy-reveal .75s .12s both cubic-bezier(.22, 1, .36, 1); }
+.accent-line { width: 48px; height: 5px; border-radius: 9px; background: #5ce0ae; margin-bottom: 27px; box-shadow: 0 0 25px rgba(92, 224, 174, .38); }
 .login-hero-title { margin: 0; max-width: 640px; font-size: clamp(39px, 4.4vw, 62px); line-height: 1.05; letter-spacing: -2.2px; }
 .login-hero-subtitle { max-width: 520px; margin: 20px 0 38px; font-size: 21px; line-height: 1.48; color: rgba(255,255,255,.88); }
 .benefit-list { display: grid; gap: 22px; }
-.benefit { display: grid; grid-template-columns: 58px 1fr; gap: 17px; align-items: center; }
+.benefit { display: grid; grid-template-columns: 58px 1fr; gap: 17px; align-items: center; animation: login-benefit-reveal .65s both cubic-bezier(.22, 1, .36, 1); }
+.benefit:nth-child(2) { animation-delay: .12s; }
+.benefit:nth-child(3) { animation-delay: .24s; }
 .benefit-icon { width: 58px; height: 58px; display: grid; place-items: center; color: #b7f6da; border: 1px solid rgba(56, 208, 149, .24); border-radius: 18px; background: rgba(21, 154, 111, .22); }
 .benefit strong { display: block; margin-bottom: 3px; font-size: 16px; }
 .benefit span { color: rgba(255,255,255,.76); font-size: 14px; }
@@ -133,18 +147,19 @@ button { cursor: pointer; }
 .login-tagline { margin-top: auto; padding-top: 32px; color: rgba(255,255,255,.78); font-size: 10px; font-weight: 720; letter-spacing: 3px; }
 .login-tagline::before { content: ''; display: block; width: 28px; height: 2px; margin-bottom: 14px; background: #84e8bd; }
 
-.login-panel { display: flex; flex-direction: column; min-height: 100vh; padding: 32px clamp(24px, 5vw, 74px) 30px; background: #fcfdfd; }
+.login-panel { display: flex; flex-direction: column; min-height: 100vh; padding: 28px clamp(24px, 5vw, 74px) 30px; background: #fcfdfd; }
 .login-topbar { display: flex; align-items: center; justify-content: flex-end; gap: 20px; color: var(--ink-soft); font-size: 14px; }
-.login-topbar a { padding: 13px 22px; border: 1px solid #43ae88; border-radius: 10px; color: var(--green-900); font-weight: 720; transition: background .2s, color .2s; }
+.login-topbar a { padding: 11px 18px; border: 1px solid rgba(7, 97, 77, .45); border-radius: 999px; color: var(--green-900); font-weight: 720; transition: background .2s, color .2s, transform .2s, box-shadow .2s; }
 .login-topbar a:hover { color: #fff; background: var(--green-800); }
-.login-card { width: min(100%, 570px); margin: auto; padding: 40px 42px 32px; border: 1px solid rgba(225,231,235,.65); border-radius: 20px; background: #fff; box-shadow: 0 12px 42px rgba(31, 49, 66, .07); }
+.login-topbar a:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(4, 55, 47, .13); }
+.login-card { width: min(100%, 570px); margin: auto; padding: 40px 42px 32px; border: 1px solid rgba(225,231,235,.76); border-radius: 24px; background: rgba(255,255,255,.98); box-shadow: 0 20px 58px rgba(26, 59, 65, .1); animation: login-card-reveal .8s .08s both cubic-bezier(.22, 1, .36, 1); }
 .login-card-header { text-align: center; }
 .login-card-header .vistora-logo { justify-content: center; margin-bottom: 28px; }
 .login-card-header .vistora-logo__word { font-size: 34px; }
 .login-card-header .vistora-logo__mark { width: 48px; height: 54px; }
 .login-card h1 { margin: 0; color: #142238; font-size: 28px; letter-spacing: -.8px; }
 .login-card-header p { max-width: 370px; margin: 10px auto 27px; color: var(--ink-soft); font-size: 16px; line-height: 1.45; }
-.login-card-header .demo-hint { margin: -14px 0 24px; color: var(--green-800); font-size: 12px; line-height: 1.4; text-align: center; }
+.login-card-header .demo-hint { margin: 8px 0 12px; color: var(--green-800); font-size: 12px; line-height: 1.4; text-align: center; }
 .login-card-header .demo-hint strong { font-weight: 750; }
 .form-field { display: grid; gap: 8px; margin-bottom: 19px; }
 .form-field label { color: #233247; font-size: 14px; font-weight: 700; }
@@ -159,9 +174,9 @@ button { cursor: pointer; }
 .checkbox-label input { width: 21px; height: 21px; accent-color: var(--green-800); }
 .login-options a, .login-signup a { color: var(--green-800); font-weight: 700; }
 .login-error { margin: -8px 0 16px; color: #c23e3d; font-size: 12px; line-height: 1.4; }
-.button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 0 20px; border: 1px solid transparent; border-radius: 10px; font-weight: 720; transition: transform .2s, background .2s, border .2s; }
+.button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 0 20px; border: 1px solid transparent; border-radius: 10px; font-weight: 720; transition: transform .2s, background .2s, border .2s, box-shadow .2s; }
 .button:hover { transform: translateY(-1px); }
-.button--primary { color: #fff; background: var(--green-800); box-shadow: 0 7px 14px rgba(5, 92, 70, .16); }
+.button--primary { color: #fff; background: linear-gradient(135deg, #087557, #04372f); box-shadow: 0 8px 18px rgba(5, 92, 70, .18); }
 .button--primary:hover { background: var(--green-900); }
 .button--outline { color: var(--green-900); border-color: var(--line-strong); background: #fff; }
 .button--soft { color: var(--green-900); border-color: transparent; background: var(--green-50); }
@@ -175,6 +190,35 @@ button { cursor: pointer; }
 .login-trust { display: flex; justify-content: space-between; gap: 18px; width: min(100%, 570px); margin: 25px auto 0; color: #758396; font-size: 12px; }
 .trust-item { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
 .trust-item svg { color: var(--green-900); }
+
+@keyframes login-image-drift {
+  from { transform: scale(1.04) translate3d(0, 0, 0); }
+  to { transform: scale(1.09) translate3d(-1.2%, -1%, 0); }
+}
+
+@keyframes login-copy-reveal {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes login-benefit-reveal {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes login-card-reveal {
+  from { opacity: 0; transform: translateY(18px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
 
 /* Application shell */
 .app-shell { min-height: 100vh; display: flex; background: var(--canvas); }
@@ -386,10 +430,10 @@ button { cursor: pointer; }
 }
 
 @media (max-width: 900px) {
-  .login-page { display: block; }.login-hero { min-height: 570px; }.login-hero-content { min-height: 570px; padding: 38px 34px; }.login-hero-copy { margin-top: 90px; }.login-hero-title { font-size: 43px; }.login-hero-subtitle { margin-bottom: 25px; font-size: 17px; }.benefit-list { grid-template-columns: repeat(3, 1fr); gap: 12px; }.benefit { display: block; }.benefit-icon { width: 44px; height: 44px; margin-bottom: 8px; }.benefit strong { font-size: 13px; }.benefit span { display: block; font-size: 11px; }.login-proof, .login-tagline { display: none; }.login-panel { min-height: auto; padding: 23px 26px 35px; }.login-card { margin: 42px auto 0; }.login-trust { margin-top: 22px; }
+  .login-page { display: block; }.login-hero { min-height: 570px; }.login-hero-media { background-position: 64% center; }.login-hero-content { min-height: 570px; padding: 38px 34px; }.login-hero-copy { margin-top: 90px; }.login-hero-title { font-size: 43px; }.login-hero-subtitle { margin-bottom: 25px; font-size: 17px; }.benefit-list { grid-template-columns: repeat(3, 1fr); gap: 12px; }.benefit { display: block; }.benefit-icon { width: 44px; height: 44px; margin-bottom: 8px; }.benefit strong { font-size: 13px; }.benefit span { display: block; font-size: 11px; }.login-proof, .login-tagline { display: none; }.login-panel { min-height: auto; padding: 23px 26px 35px; }.login-card { margin: 42px auto 0; }.login-trust { margin-top: 22px; }
   .sidebar { width: 220px; }.app-main { width: calc(100% - 220px); margin-left: 220px; }.topbar { padding: 0 18px; }.topbar-search { max-width: 330px; }.user-info { display: none; }.app-content { padding: 20px 16px; }.stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.detail-layout { grid-template-columns: 1fr; }.summary-sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); }.summary-sidebar .detail-actions { grid-column: span 2; }
 }
 
 @media (max-width: 680px) {
-  .login-hero { min-height: 480px; }.login-hero-content { min-height: 480px; padding: 26px 22px; }.login-hero .vistora-logo__word { font-size: 31px; }.login-hero-title { margin-top: 70px; font-size: 35px; letter-spacing: -1.4px; }.login-hero-subtitle { font-size: 15px; }.benefit-list { display: none; }.login-panel { padding: 18px 14px 25px; }.login-topbar { font-size: 12px; }.login-topbar a { padding: 10px 12px; }.login-card { margin-top: 28px; padding: 29px 20px 25px; }.login-card h1 { font-size: 23px; }.login-card-header p { font-size: 14px; }.login-trust { display: grid; grid-template-columns: 1fr; justify-items: center; gap: 8px; }.app-main { width: 100%; margin-left: 0; }.sidebar { transform: translateX(-100%); transition: transform .22s ease; }.sidebar--open { transform: translateX(0); box-shadow: 8px 0 30px rgba(0,0,0,.18); }.sidebar-backdrop { display: block; position: fixed; z-index: 15; inset: 0; border: 0; background: rgba(3, 31, 29, .35); }.mobile-menu { display: grid; place-items: center; }.topbar { height: 62px; padding: 0 14px; gap: 10px; }.topbar-search { flex: 1; max-width: none; }.topbar-search .keycap { display: none; }.topbar-cta { display: none; }.topbar-actions { gap: 8px; }.user-menu { padding-left: 7px; }.user-menu > svg { display: none; }.app-content { padding: 17px 12px; }.page-heading { display: block; }.page-heading h1 { font-size: 28px; }.page-heading p { font-size: 14px; }.heading-side { display: none; }.stats-grid, .stats-grid--three { grid-template-columns: 1fr; }.metric-card { min-height: 93px; }.dashboard-grid, .dashboard-grid--bottom, .analysis-grid, .analysis-grid--bottom, .analysis-grid--lower { grid-template-columns: 1fr; }.dashboard-grid--bottom .panel:last-child, .analysis-grid > .panel:first-child, .analysis-grid--bottom > .panel:last-child, .analysis-grid--lower > .panel:last-child { grid-column: auto; }.donut-layout, .analysis-donut .donut-layout, .summary-panel .donut-layout { grid-template-columns: 130px 1fr; }.filters-bar { grid-template-columns: 1fr 1fr; }.filters-bar .filter-field:first-child { grid-column: span 2; }.filter-reset { align-self: center; }.list-toolbar { flex-wrap: wrap; }.list-search { width: 100%; }.toolbar-spacer { display: none; }.list-toolbar .toolbar-select { flex: 1; }.view-switch { margin-left: auto; }.aside-stack, .summary-sidebar { grid-template-columns: 1fr; }.summary-sidebar .detail-actions { grid-column: auto; }.property-summary { grid-template-columns: 1fr 1fr; }.property-summary-item:first-child { grid-column: span 2; }.property-summary-item:nth-child(3) { border-right: 0; }.property-summary-item:nth-child(4), .property-summary-item:nth-child(5) { border-top: 1px solid var(--line); }.detail-title-line { align-items: flex-start; flex-wrap: wrap; }.detail-progress { width: 100%; }.detail-tabs { gap: 15px; overflow-x: auto; }.detail-tab-actions { display: none; }.detail-layout { grid-template-columns: 1fr; }.room-progress { width: 95px; }.checklist-table { min-width: 670px; }.room-card { overflow-x: auto; }.room-header { min-width: 650px; }.detail-actions { justify-content: stretch; }.detail-actions .button { flex: 1; padding: 0 8px; }.hbar-row { grid-template-columns: 90px 1fr 24px 26px; }.data-table { min-width: 700px; }.panel-body { padding-left: 14px; padding-right: 14px; }.inspection-grid-view { grid-template-columns: 1fr; }
+  .login-hero { min-height: 480px; }.login-hero-media { background-position: 69% center; }.login-hero-content { min-height: 480px; padding: 26px 22px; }.login-hero .vistora-logo__word { font-size: 31px; }.login-hero .vistora-logo__mark { width: 45px; height: 50px; }.login-hero-title { margin-top: 70px; font-size: 35px; letter-spacing: -1.4px; }.login-hero-subtitle { font-size: 15px; }.benefit-list { display: none; }.login-panel { padding: 18px 14px 25px; }.login-topbar { font-size: 12px; }.login-topbar a { padding: 10px 12px; }.login-card { margin-top: 28px; padding: 29px 20px 25px; }.login-card h1 { font-size: 23px; }.login-card-header p { font-size: 14px; }.login-trust { display: grid; grid-template-columns: 1fr; justify-items: center; gap: 8px; }.app-main { width: 100%; margin-left: 0; }.sidebar { transform: translateX(-100%); transition: transform .22s ease; }.sidebar--open { transform: translateX(0); box-shadow: 8px 0 30px rgba(0,0,0,.18); }.sidebar-backdrop { display: block; position: fixed; z-index: 15; inset: 0; border: 0; background: rgba(3, 31, 29, .35); }.mobile-menu { display: grid; place-items: center; }.topbar { height: 62px; padding: 0 14px; gap: 10px; }.topbar-search { flex: 1; max-width: none; }.topbar-search .keycap { display: none; }.topbar-cta { display: none; }.topbar-actions { gap: 8px; }.user-menu { padding-left: 7px; }.user-menu > svg { display: none; }.app-content { padding: 17px 12px; }.page-heading { display: block; }.page-heading h1 { font-size: 28px; }.page-heading p { font-size: 14px; }.heading-side { display: none; }.stats-grid, .stats-grid--three { grid-template-columns: 1fr; }.metric-card { min-height: 93px; }.dashboard-grid, .dashboard-grid--bottom, .analysis-grid, .analysis-grid--bottom, .analysis-grid--lower { grid-template-columns: 1fr; }.dashboard-grid--bottom .panel:last-child, .analysis-grid > .panel:first-child, .analysis-grid--bottom > .panel:last-child, .analysis-grid--lower > .panel:last-child { grid-column: auto; }.donut-layout, .analysis-donut .donut-layout, .summary-panel .donut-layout { grid-template-columns: 130px 1fr; }.filters-bar { grid-template-columns: 1fr 1fr; }.filters-bar .filter-field:first-child { grid-column: span 2; }.filter-reset { align-self: center; }.list-toolbar { flex-wrap: wrap; }.list-search { width: 100%; }.toolbar-spacer { display: none; }.list-toolbar .toolbar-select { flex: 1; }.view-switch { margin-left: auto; }.aside-stack, .summary-sidebar { grid-template-columns: 1fr; }.summary-sidebar .detail-actions { grid-column: auto; }.property-summary { grid-template-columns: 1fr 1fr; }.property-summary-item:first-child { grid-column: span 2; }.property-summary-item:nth-child(3) { border-right: 0; }.property-summary-item:nth-child(4), .property-summary-item:nth-child(5) { border-top: 1px solid var(--line); }.detail-title-line { align-items: flex-start; flex-wrap: wrap; }.detail-progress { width: 100%; }.detail-tabs { gap: 15px; overflow-x: auto; }.detail-tab-actions { display: none; }.detail-layout { grid-template-columns: 1fr; }.room-progress { width: 95px; }.checklist-table { min-width: 670px; }.room-card { overflow-x: auto; }.room-header { min-width: 650px; }.detail-actions { justify-content: stretch; }.detail-actions .button { flex: 1; padding: 0 8px; }.hbar-row { grid-template-columns: 90px 1fr 24px 26px; }.data-table { min-width: 700px; }.panel-body { padding-left: 14px; padding-right: 14px; }.inspection-grid-view { grid-template-columns: 1fr; }
 }

@@ -30,6 +30,7 @@ export function LoginScreen() {
   return (
     <main className="login-page">
       <section className="login-hero" aria-label="Sobre a Vistora">
+        <div className="login-hero-media" aria-hidden="true" />
         <div className="login-hero-content">
           <VistoraLogo light />
 
