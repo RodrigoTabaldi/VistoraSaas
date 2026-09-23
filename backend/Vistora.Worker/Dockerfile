@@ -4,7 +4,7 @@ COPY . .
 RUN dotnet restore backend/Vistora.Worker/Vistora.Worker.csproj
 RUN dotnet publish backend/Vistora.Worker/Vistora.Worker.csproj --no-restore -c Release -o /app/publish
 
-FROM mcr.microsoft.com/dotnet/runtime:10.0
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "Vistora.Worker.dll"]

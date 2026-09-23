@@ -5,7 +5,7 @@ Base do SaaS multiempresa para vistorias imobiliárias. Esta etapa estabelece a 
 ## Estrutura
 
 ```text
-frontend/                       React + TypeScript + PWA
+frontend/                       Next.js + React + TypeScript + PWA
 backend/
   Vistora.Domain/               Regras e modelos de domínio (sem dependências)
   Vistora.Application/          Casos de uso e contratos
@@ -59,7 +59,7 @@ npm.cmd install
 npm.cmd run dev
 ```
 
-O frontend possui manifest e service worker mínimos, permitindo sua evolução como PWA. O container do frontend existe em `frontend/Dockerfile`, mas não faz parte do Compose local nesta etapa.
+O frontend usa o App Router do Next.js, possui manifest e service worker mínimos para evolução como PWA e gera uma imagem standalone via `frontend/Dockerfile`. Ele não faz parte do Compose local nesta etapa.
 
 ## Variáveis de ambiente
 

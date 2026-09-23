@@ -5,9 +5,10 @@
 *.suo
 .vs/
 
-# Node/Vite
+# Node/Next.js
 frontend/node_modules/
 frontend/dist/
+frontend/.next/
 frontend/*.tsbuildinfo
 
 # Local configuration and tooling

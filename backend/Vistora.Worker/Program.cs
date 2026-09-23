@@ -13,12 +13,9 @@ builder.Services
 builder.Services.AddHealthChecks().AddCheck<WorkerReadinessHealthCheck>("worker_readiness");
 builder.Services.AddHostedService<HealthCheckStartupService>();
 builder.Services.AddHostedService<Worker>();
- branch-jurachgb
 builder.Services.AddHostedService<ReportJobConsumer>();
 builder.Services.AddHostedService<ReportJobRetryScanner>();
-=======
 builder.Services.AddHostedService<MessageConsumerWorker>();
-main
 
 var host = builder.Build();
 await host.RunAsync();
