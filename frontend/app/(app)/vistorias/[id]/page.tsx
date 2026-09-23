@@ -19,7 +19,7 @@ export default async function InspectionDetailPage({ params }: { params: Promise
         <div className="property-summary-item"><span className="summary-icon"><Icon name="users" size={18} /></span><div className="summary-copy"><span>Vistoriador responsável</span><strong>Carla Mendes</strong><small>CRECI 123456-F</small></div></div>
       </section>
 
-      <InspectionDetail />
+      <InspectionDetail inspectionId={id} />
     </>
   );
 }

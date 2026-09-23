@@ -28,11 +28,11 @@ export function PanelHeader({ title, action, children }: Readonly<{ title: strin
   return <div className="panel-header"><h2 className="panel-title">{title}</h2>{action ?? children}</div>;
 }
 
-export function DonutChart({ value, label, color = '#11a870', children, className = '' }: Readonly<{ value: number; label: string; color?: string; children?: ReactNode; className?: string }>) {
+export function DonutChart({ value, label, color = '#11a870', children, className = '', unit = 'vistorias' }: Readonly<{ value: number; label: string; color?: string; children?: ReactNode; className?: string; unit?: string }>) {
   const style = { '--donut-value': `${value}%`, '--donut-color': color } as CSSProperties;
   return (
     <div className={`donut-layout ${className}`}>
-      <div className="donut" style={style}><div className="donut-center"><strong>{label}</strong><span>vistorias</span></div></div>
+      <div className="donut" style={style}><div className="donut-center"><strong>{label}</strong><span>{unit}</span></div></div>
       {children}
     </div>
   );

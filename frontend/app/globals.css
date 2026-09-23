@@ -926,3 +926,367 @@ button:focus-visible, a:focus-visible, input:focus-visible {
     -webkit-overflow-scrolling: touch;
   }
 }
+
+/* Triage workflow */
+.triage-page-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: -10px 0 16px;
+}
+
+.triage-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 290px;
+  gap: 16px;
+  align-items: start;
+}
+
+.triage-workspace > .panel {
+  min-width: 0;
+}
+
+.triage-side-panel {
+  padding-bottom: 17px;
+}
+
+.triage-flow {
+  display: grid;
+  padding: 0 18px;
+}
+
+.triage-flow-step {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 11px;
+  align-items: start;
+}
+
+.triage-flow-step > span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #d6e6df;
+  border-radius: 50%;
+  color: #718398;
+  background: #f4f9f7;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.triage-flow-step--active > span {
+  border-color: transparent;
+  color: #fff;
+  background: var(--green-800);
+  box-shadow: 0 0 0 5px #e3f7ee;
+}
+
+.triage-flow-step strong,
+.triage-flow-step small {
+  display: block;
+}
+
+.triage-flow-step strong {
+  margin-top: 3px;
+  color: #24354a;
+  font-size: 13px;
+}
+
+.triage-flow-step small {
+  margin-top: 5px;
+  color: #7b899b;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.triage-flow-line {
+  width: 1px;
+  height: 25px;
+  margin: 2px 0 2px 14px;
+  background: #dfeae6;
+}
+
+.triage-flow-cta {
+  width: calc(100% - 36px);
+  margin: 20px 18px 0;
+}
+
+.table-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.table-actions .icon-button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 7px;
+}
+
+.icon-button--success {
+  color: var(--green-800);
+  background: #eaf9f2;
+}
+
+.icon-button--success:hover {
+  background: #d2f3e4;
+}
+
+.table-complete {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  color: #0b9763;
+  background: #eaf9f2;
+}
+
+.schedule-action {
+  display: inline-grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border: 1px solid #bce9d4;
+  border-radius: 7px;
+  color: var(--green-800);
+  background: #effbf5;
+  transition: transform .2s ease, background .2s ease, box-shadow .2s ease;
+}
+
+.schedule-action:hover {
+  background: #d7f5e6;
+  box-shadow: 0 5px 12px rgba(7, 117, 87, .15);
+  transform: translateY(-1px);
+}
+
+.schedule-action--done {
+  color: #5b7186;
+  border-color: var(--line);
+  background: #f7f9fa;
+}
+
+.data-table--schedule th:last-child,
+.data-table--schedule td:last-child {
+  width: 6%;
+  padding-left: 2px;
+  padding-right: 2px;
+}
+
+.data-table--schedule th:nth-child(1) { width: 14%; }
+.data-table--schedule th:nth-child(2) { width: 12%; }
+.data-table--schedule th:nth-child(3) { width: 28%; }
+.data-table--schedule th:nth-child(4) { width: 13%; }
+.data-table--schedule th:nth-child(5) { width: 18%; }
+.data-table--schedule th:nth-child(6) { width: 9%; }
+
+.triage-create-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 315px;
+  gap: 16px;
+  align-items: start;
+}
+
+.triage-form,
+.triage-create-aside {
+  border: 1px solid #e4eaed;
+  border-radius: var(--radius-lg);
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.triage-form {
+  padding: 25px;
+}
+
+.triage-form-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  padding-bottom: 21px;
+  border-bottom: 1px solid #edf1f1;
+}
+
+.triage-form-icon,
+.triage-aside-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  color: var(--green-800);
+  background: #e7f8f0;
+}
+
+.triage-form-icon {
+  width: 42px;
+  height: 42px;
+}
+
+.triage-form-intro h2 {
+  margin: 2px 0 5px;
+  color: #193148;
+  font-size: 18px;
+}
+
+.triage-form-intro p {
+  margin: 0;
+  color: #718198;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.triage-form .form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 17px 15px;
+  padding-top: 22px;
+}
+
+.triage-form .form-field {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.triage-form .form-field > span {
+  color: #2b3b50;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.triage-form .form-field input,
+.triage-form .form-field select {
+  width: 100%;
+  min-height: 43px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  outline: none;
+  color: #25374d;
+  background: #fff;
+  font-size: 13px;
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+.triage-form .form-field input:focus,
+.triage-form .form-field select:focus {
+  border-color: var(--green-600);
+  box-shadow: 0 0 0 3px rgba(19, 171, 113, .12);
+}
+
+.triage-form .form-field small {
+  margin-top: -2px;
+  color: #8491a1;
+  font-size: 10px;
+}
+
+.form-field--full {
+  grid-column: span 2;
+}
+
+.form-feedback {
+  margin: 19px 0 0;
+  font-size: 12px;
+}
+
+.form-feedback--error {
+  color: #c23e3d;
+}
+
+.triage-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding-top: 23px;
+  margin-top: 21px;
+  border-top: 1px solid #edf1f1;
+}
+
+.triage-create-aside {
+  padding: 23px;
+}
+
+.triage-aside-icon {
+  width: 43px;
+  height: 43px;
+  margin-bottom: 18px;
+}
+
+.triage-create-aside h2 {
+  margin: 0 0 8px;
+  color: #193148;
+  font-size: 19px;
+}
+
+.triage-create-aside p {
+  margin: 0;
+  color: #718198;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.triage-aside-list {
+  display: grid;
+  gap: 12px;
+  padding-top: 21px;
+  margin-top: 21px;
+  border-top: 1px solid #edf1f1;
+}
+
+.triage-aside-list span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #3e566d;
+  font-size: 12px;
+}
+
+.triage-aside-list svg {
+  color: var(--green-700);
+}
+
+@media (max-width: 900px) {
+  .triage-workspace,
+  .triage-create-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .triage-side-panel,
+  .triage-create-aside {
+    display: none;
+  }
+}
+
+@media (max-width: 680px) {
+  .triage-page-actions {
+    justify-content: stretch;
+    margin-top: -4px;
+  }
+
+  .triage-page-actions .button {
+    width: 100%;
+  }
+
+  .triage-form {
+    padding: 18px;
+  }
+
+  .triage-form .form-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .form-field--full {
+    grid-column: auto;
+  }
+
+  .triage-form-actions {
+    justify-content: stretch;
+  }
+
+  .triage-form-actions .button {
+    flex: 1;
+  }
+}

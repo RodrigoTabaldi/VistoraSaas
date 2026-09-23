@@ -4,6 +4,7 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { Icon, type IconName } from './icons';
 import { DonutChart, LegendRow, ProgressBar, StatusBadge } from './dashboard-primitives';
 import { detailRooms, type ChecklistStatus } from '../lib/mock-data';
+import { useInspections } from '../lib/inspection-store';
 
 const tabs = ['Checklist', 'Fotos', 'Observações', 'Histórico'] as const;
 
@@ -11,11 +12,13 @@ function roomProgress(verified: number, total: number) {
   return Math.round((verified / total) * 100);
 }
 
-export function InspectionDetail() {
+export function InspectionDetail({ inspectionId }: Readonly<{ inspectionId: string }>) {
+  const { getInspection, completeInspection } = useInspections();
+  const inspection = getInspection(inspectionId);
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>('Checklist');
   const [openRooms, setOpenRooms] = useState<string[]>(['Sala']);
-  const [completed, setCompleted] = useState(false);
   const [itemStatuses, setItemStatuses] = useState<Record<string, ChecklistStatus>>({});
+  const completed = inspection?.status.toLowerCase().includes('conclu') ?? false;
 
   const allItems = useMemo(() => detailRooms.flatMap((room) => room.items), []);
   const statusFor = (itemName: string, fallback: ChecklistStatus) => itemStatuses[itemName] ?? fallback;
@@ -72,7 +75,7 @@ export function InspectionDetail() {
             <article className="panel summary-panel"><div className="panel-header"><h2 className="panel-title">Itens por ambiente</h2></div><div className="mini-bars">{detailRooms.map((room) => <div className="hbar-row" key={room.name}><span><Icon name={room.icon as IconName} size={14} /> {room.name}</span><div className="progress-line"><span style={{ width: `${roomProgress(room.verified, room.total)}%`, background: roomProgress(room.verified, room.total) < 60 ? '#ffc735' : '#0c9e69' }} /></div><span className="hbar-value">{room.verified} / {room.total}</span></div>)}</div></article>
 
             <article className="panel summary-panel"><div className="panel-header"><h2 className="panel-title">Severidade dos problemas</h2></div><div className="severity-grid"><div className="severity severity--high"><Icon name="x" size={21} /><strong>2</strong><span>Comprometem<br />o uso do imóvel</span></div><div className="severity severity--medium"><Icon name="warning" size={21} /><strong>7</strong><span>Necessitam de<br />reparo</span></div><div className="severity severity--low"><Icon name="sparkles" size={21} /><strong>3</strong><span>Ajustes<br />estéticos</span></div></div></article>
-            <div className="detail-actions"><button className="button button--outline" type="button"><Icon name="chevronLeft" size={16} /> Voltar</button><button className="button button--outline" type="button"><Icon name="file" size={16} /> Salvar rascunho</button><button className="button button--primary" type="button" onClick={() => setCompleted(true)}><Icon name="check" size={17} /> Concluir vistoria</button></div>
+            <div className="detail-actions"><button className="button button--outline" type="button"><Icon name="chevronLeft" size={16} /> Voltar</button><button className="button button--outline" type="button"><Icon name="file" size={16} /> Salvar rascunho</button><button className="button button--primary" type="button" disabled={completed} onClick={() => completeInspection(inspectionId)}><Icon name="check" size={17} /> {completed ? 'Triagem concluída' : 'Concluir triagem'}</button></div>
           </aside>
         </div>
       )}

@@ -7,7 +7,7 @@ import { Icon, type IconName } from './icons';
 
 const navigation: Array<{ href: string; label: string; icon: IconName }> = [
   { href: '/dashboard', label: 'Home', icon: 'home' },
-  { href: '/vistorias', label: 'Vistorias', icon: 'clipboard' },
+  { href: '/triagens', label: 'Triagens', icon: 'clipboard' },
   { href: '/imoveis', label: 'Imóveis', icon: 'building' },
   { href: '/agenda', label: 'Agenda', icon: 'calendar' },
   { href: '/relatorios', label: 'Relatórios', icon: 'chart' },
@@ -61,7 +61,7 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
               <span className="user-info"><strong>Bruno Almeida</strong><span>Administrador</span></span>
               <Icon name="chevronDown" size={16} />
             </div>
-            <Link className="button button--primary topbar-cta" href="/vistorias"><Icon name="plus" size={18} /> Nova vistoria</Link>
+            <Link className="button button--primary topbar-cta" href="/triagens/nova"><Icon name="plus" size={18} /> Nova triagem</Link>
           </div>
         </header>
         <main className="app-content">{children}</main>
