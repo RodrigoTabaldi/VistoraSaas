@@ -59,7 +59,8 @@ export function LoginScreen() {
             <p>Entre para continuar suas vistorias.</p>
           </div>
 
-          <form onSubmit={handleSubmit}>
+          <form method="post" onSubmit={handleSubmit}>
+            <noscript><p className="login-error" role="alert">Ative o JavaScript para entrar na sua conta.</p></noscript>
             <div className="form-field">
               <label htmlFor="email">E-mail</label>
               <div className="input-wrap">

@@ -65,7 +65,8 @@ export function SignupScreen() {
             <p>Cadastre sua empresa e comece suas vistorias.</p>
           </div>
 
-          <form onSubmit={handleSubmit}>
+          <form method="post" onSubmit={handleSubmit}>
+            <noscript><p className="login-error" role="alert">Ative o JavaScript para criar sua conta.</p></noscript>
             <div className="form-field">
               <label htmlFor="name">Seu nome</label>
               <div className="input-wrap">

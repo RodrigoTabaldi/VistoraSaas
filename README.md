@@ -63,6 +63,8 @@ O frontend usa o App Router do Next.js, possui manifest e service worker mínimo
 
 O login fica em `/` e o cadastro em `/cadastro`. O Next encaminha chamadas `/api/*` para `VISTORA_API_URL`, que por padrão aponta para `http://localhost:8080`; configure essa variável no ambiente do frontend se a API estiver em outro endereço. O cadastro entra na conta e abre o dashboard.
 
+Para abrir o frontend em desenvolvimento por outro computador na rede, inclua o hostname ou IP usado no navegador (sem protocolo ou porta) em `allowedDevOrigins` no `frontend/next.config.ts` e reinicie `npm.cmd run dev`. O endereço `10.1.18.116` está autorizado para este ambiente. O Next bloqueia os scripts de desenvolvimento para origens não autorizadas.
+
 ## Variáveis de ambiente
 
 `.env.example` contém as variáveis para PostgreSQL, Redis, RabbitMQ, Supabase Storage S3 e OIDC/JWT externo. Em `Development`, a API aplica as migrations pendentes ao iniciar; fora desse ambiente, aplique migrations no processo de implantação. Para o Supabase, use o endpoint S3 direto, o region, bucket e as S3 Access Keys criadas nas configurações de Storage. Essas chaves têm acesso amplo e devem ficar apenas no backend e no arquivo `.env`, nunca no frontend.
