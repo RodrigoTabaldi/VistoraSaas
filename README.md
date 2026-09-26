@@ -59,6 +59,8 @@ npm.cmd install
 npm.cmd run dev
 ```
 
+O servidor de desenvolvimento escuta em todas as interfaces de rede (`0.0.0.0`) para permitir acesso por outros dispositivos. O IP/hostname usado no navegador precisa estar listado em `allowedDevOrigins` no `frontend/next.config.ts`. O proxy `/api/*` roda no servidor Next e usa `VISTORA_API_URL`; quando frontend e API estão na mesma máquina, o padrão `http://localhost:8080` continua válido. Se a API estiver em outro host, defina `VISTORA_API_URL` no ambiente do processo do frontend com o endereço alcançável a partir da máquina que executa o Next e reinicie o servidor.
+
 O frontend usa o App Router do Next.js, possui manifest e service worker mínimos para evolução como PWA e gera uma imagem standalone via `frontend/Dockerfile`. Ele não faz parte do Compose local nesta etapa.
 
 O login fica em `/` e o cadastro em `/cadastro`. O Next encaminha chamadas `/api/*` para `VISTORA_API_URL`, que por padrão aponta para `http://localhost:8080`; configure essa variável no ambiente do frontend se a API estiver em outro endereço. O cadastro entra na conta e abre o dashboard.

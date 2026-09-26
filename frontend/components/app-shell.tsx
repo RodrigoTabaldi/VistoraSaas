@@ -48,6 +48,26 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
     return () => { active = false; };
   }, [router]);
 
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setSidebarOpen(false);
+    }
+    window.addEventListener('keydown', closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [sidebarOpen]);
+
   async function handleLogout() {
     try {
       await apiRequest('/api/v1/auth/logout', { method: 'POST' });
@@ -69,7 +89,7 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
 
   return (
     <div className="app-shell">
-      <aside className={`sidebar ${sidebarOpen ? 'sidebar--open' : ''}`}>
+      <aside id="primary-navigation" className={`sidebar ${sidebarOpen ? 'sidebar--open' : ''}`}>
         <div className="sidebar-brand">
           <div className="sidebar-brand-image" aria-label="Vistora">
             <img src="/logo.jpeg" alt="Vistora" />
@@ -94,7 +114,7 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
 
       <div className="app-main">
         <header className="topbar">
-          <button className="mobile-menu" type="button" aria-label="Abrir menu" onClick={() => setSidebarOpen(true)}><Icon name="menu" size={23} /></button>
+          <button className="mobile-menu" type="button" aria-label={sidebarOpen ? 'Fechar menu' : 'Abrir menu'} aria-expanded={sidebarOpen} aria-controls="primary-navigation" onClick={() => setSidebarOpen((open) => !open)}><Icon name={sidebarOpen ? 'x' : 'menu'} size={23} /></button>
           <label className="topbar-search">
             <Icon name="search" size={19} />
             <input aria-label="Buscar imóveis, vistorias e clientes" placeholder="Buscar imóveis, vistorias, clientes..." />
