@@ -28,6 +28,23 @@ public sealed class User : IOrganizationScoped
     public Organization? Organization { get; set; }
 }
 
+/// <summary>
+/// Credentials for signing in to one organization's user membership. This table is global so a
+/// user can be located by email before the request has an authenticated tenant context.
+/// </summary>
+public sealed class Account
+{
+    public Guid Id { get; set; }
+    public Guid OrganizationId { get; set; }
+    public required string Name { get; set; }
+    public required string Email { get; set; }
+    public required string NormalizedEmail { get; set; }
+    public required string PasswordHash { get; set; }
+    public required string Role { get; set; }
+    public DateTimeOffset CreatedAtUtc { get; set; }
+    public User? User { get; set; }
+}
+
 public sealed class Property : IOrganizationScoped
 {
     public Guid Id { get; set; }

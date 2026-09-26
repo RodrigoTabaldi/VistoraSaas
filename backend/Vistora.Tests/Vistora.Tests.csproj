@@ -16,6 +16,7 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="../Vistora.Api/Vistora.Api.csproj" />
     <ProjectReference Include="../Vistora.Application/Vistora.Application.csproj" />
     <ProjectReference Include="../Vistora.Domain/Vistora.Domain.csproj" />
     <ProjectReference Include="../Vistora.Infrastructure/Vistora.Infrastructure.csproj" />

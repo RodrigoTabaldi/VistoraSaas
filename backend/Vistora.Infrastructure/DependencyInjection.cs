@@ -41,7 +41,8 @@ using Amazon.S3;
 
           services.AddDbContext<VistoraDbContext>((serviceProvider, options) =>
               options
-                  .UseNpgsql(connectionString)
+                  .UseNpgsql(connectionString, npgsql =>
+                      npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public"))
                   .AddInterceptors(
                       serviceProvider.GetRequiredService<TenantSessionConnectionInterceptor>(),
                       serviceProvider.GetRequiredService<TenantTransactionInterceptor>(),

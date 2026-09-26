@@ -43,7 +43,10 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
         // vistora_app below - so migrations must run first.
         var superuserConnectionString = _container.GetConnectionString();
         await using var migrationContext = new VistoraDbContext(
-            new DbContextOptionsBuilder<VistoraDbContext>().UseNpgsql(superuserConnectionString).Options,
+            new DbContextOptionsBuilder<VistoraDbContext>()
+                .UseNpgsql(superuserConnectionString, npgsql =>
+                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public"))
+                .Options,
             NoTenant());
         await migrationContext.Database.MigrateAsync();
 
@@ -77,7 +80,27 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
 
         var tenantContext = new TestTenantContext(organizationId);
         var options = new DbContextOptionsBuilder<VistoraDbContext>()
-            .UseNpgsql(_appConnectionString)
+            .UseNpgsql(_appConnectionString, npgsql =>
+                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public"))
+            .AddInterceptors(
+                new TenantSessionConnectionInterceptor(),
+                new TenantTransactionInterceptor(tenantContext),
+                new TenantCommandInterceptor(tenantContext))
+            .Options;
+
+        return new VistoraDbContext(options, tenantContext);
+    }
+
+    public VistoraDbContext CreateContext(TenantContext tenantContext)
+    {
+        if (_appConnectionString is null)
+        {
+            throw new InvalidOperationException("InitializeAsync must run before CreateContext.");
+        }
+
+        var options = new DbContextOptionsBuilder<VistoraDbContext>()
+            .UseNpgsql(_appConnectionString, npgsql =>
+                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public"))
             .AddInterceptors(
                 new TenantSessionConnectionInterceptor(),
                 new TenantTransactionInterceptor(tenantContext),

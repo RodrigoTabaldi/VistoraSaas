@@ -1,6 +1,6 @@
 # Vistora
 
-Base do SaaS multiempresa para vistorias imobiliárias. Esta etapa estabelece a arquitetura e a execução local; não inclui banco de dados, autenticação, imóveis, vistorias, uploads ou laudos. A base de acesso ao Supabase Storage via protocolo S3 está disponível, mas ainda não há fluxo de upload nem entidade de negócio conectada a ela.
+Base do SaaS multiempresa para vistorias imobiliárias. A fundação inclui API, persistência PostgreSQL com isolamento por organização, criação da organização e do primeiro usuário, e login por e-mail e senha. Imóveis, vistorias, uploads e laudos ainda não têm fluxos completos de produto. A base de acesso ao Supabase Storage via protocolo S3 está disponível, mas ainda não há fluxo de upload nem entidade de negócio conectada a ela.
 
 ## Estrutura
 
@@ -19,10 +19,10 @@ docs/                           Documentação de produto e arquitetura
 
 ## PostgreSQL: pontos de implementação
 
-- `backend/Vistora.Infrastructure/Persistence/PostgreSql/`: código de persistência .NET. O `README.md` local define os diretórios para `DbContext`, mapeamentos, migrations e repositórios.
+- `backend/Vistora.Infrastructure/Persistence/PostgreSql/`: `DbContext`, mapeamentos, migrations e interceptors de isolamento por organização.
 - `infra/postgresql/`: scripts operacionais e dados de seed apenas para desenvolvimento.
 
-As pastas são intencionalmente vazias nesta etapa. Não há pacote de Entity Framework, schema, migration ou conexão de banco implementados.
+O cadastro cria uma organização, uma associação de usuário com papel de administrador e as credenciais da conta em uma transação. A senha é armazenada como hash; o usuário da organização continua sujeito às políticas RLS. A migration `AddAccountCredentials` cria a tabela de credenciais e o índice global de e-mail normalizado.
 
 As referências respeitam a direção da arquitetura limpa: `Application` depende de `Domain`; `Infrastructure` depende de `Application` e `Domain`; API e Worker compõem as camadas internas.
 
@@ -61,9 +61,11 @@ npm.cmd run dev
 
 O frontend usa o App Router do Next.js, possui manifest e service worker mínimos para evolução como PWA e gera uma imagem standalone via `frontend/Dockerfile`. Ele não faz parte do Compose local nesta etapa.
 
+O login fica em `/` e o cadastro em `/cadastro`. O Next encaminha chamadas `/api/*` para `VISTORA_API_URL`, que por padrão aponta para `http://localhost:8080`; configure essa variável no ambiente do frontend se a API estiver em outro endereço. O cadastro entra na conta e abre o dashboard.
+
 ## Variáveis de ambiente
 
-`.env.example` contém as variáveis para PostgreSQL, Redis, RabbitMQ, Supabase Storage S3 e OIDC/JWT. Para o Supabase, use o endpoint S3 direto, o region, bucket e as S3 Access Keys criadas nas configurações de Storage. Essas chaves têm acesso amplo e devem ficar apenas no backend e no arquivo `.env`, nunca no frontend.
+`.env.example` contém as variáveis para PostgreSQL, Redis, RabbitMQ, Supabase Storage S3 e OIDC/JWT externo. Em `Development`, a API aplica as migrations pendentes ao iniciar; fora desse ambiente, aplique migrations no processo de implantação. Para o Supabase, use o endpoint S3 direto, o region, bucket e as S3 Access Keys criadas nas configurações de Storage. Essas chaves têm acesso amplo e devem ficar apenas no backend e no arquivo `.env`, nunca no frontend.
 
 ## Supabase Storage S3
 
@@ -77,14 +79,15 @@ O adaptador está em `backend/Vistora.Infrastructure/Storage/S3/`. Ele expõe `I
 ## API, cache e mensageria
 
 - O backend expõe propriedades, unidades, vistorias, cômodos, itens, evidências e relatórios em `/api/v1`. Uploads usam `multipart/form-data` com o campo `file`.
-- Com OIDC configurado, envie um JWT com a claim `organization_id` (ou `tenant_id`/`org_id`); os endpoints de negócio exigem autenticação. Em Development sem Authority, o fallback local é o header `X-Organization-Id`.
+- `POST /api/v1/auth/register` cria uma organização e sua conta de administrador; `POST /api/v1/auth/login` valida a senha e inicia uma sessão em cookie `HttpOnly`. O e-mail é único sem diferenciar maiúsculas de minúsculas. `POST /api/v1/auth/logout` encerra a sessão.
+- Os endpoints de negócio e `/api/v1/me` exigem autenticação por cookie da conta local ou, quando OIDC está configurado, por JWT com a claim `organization_id` (ou `tenant_id`/`org_id`). O tenant é extraído de uma claim confiável.
 - Atualizações de itens e mudanças de status exigem `rowVersion`, evitando sobrescrever alterações concorrentes. O ciclo de status é `Draft -> Completed -> Approved`.
 - `POST /api/v1/messages` publica um envelope JSON durável na fila RabbitMQ configurada em `Messaging:RabbitMq:QueueName`.
 - O Worker consome a fila com confirmação manual (`ACK`) e reprocessa mensagens que falharem (`NACK` com requeue).
 - Mensagens processadas ficam no Redis por uma hora na chave `vistora:message:{id}`. Esse fluxo é operacional e não grava no PostgreSQL.
 - O endpoint `GET /health` verifica Redis e RabbitMQ, além dos checks registrados pela aplicação.
 
-O endpoint de mensagens é uma fundação técnica para casos de uso futuros; ele ainda não substitui um outbox transacional, que deverá ser avaliado quando houver eventos de domínio persistidos. Nenhuma migration ou alteração de schema é necessária para esta etapa.
+O endpoint de mensagens é uma fundação técnica para casos de uso futuros; ele ainda não substitui um outbox transacional, que deverá ser avaliado quando houver eventos de domínio persistidos.
 
 ## Nota sobre o template legado
 

@@ -21,6 +21,9 @@ public static class ApiEndpoints
             {
                 UserId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier)
                     ?? httpContext.User.FindFirstValue("sub"),
+                Name = httpContext.User.FindFirstValue(ClaimTypes.Name),
+                Email = httpContext.User.FindFirstValue(ClaimTypes.Email),
+                Role = httpContext.User.FindFirstValue(ClaimTypes.Role),
                 OrganizationId = tenant.OrganizationId
             }));
 

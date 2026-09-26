@@ -13,6 +13,7 @@ public static class InspectionsEndpoints
     public static IEndpointRouteBuilder MapInspectionsEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapPost("/api/v1/inspections/{inspectionId:guid}/complete", CompleteInspection)
+            .RequireAuthorization()
             .WithName("CompleteInspection")
             .WithTags("Inspections");
 

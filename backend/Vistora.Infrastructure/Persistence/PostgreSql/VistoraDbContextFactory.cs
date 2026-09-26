@@ -9,7 +9,9 @@ public sealed class VistoraDbContextFactory : IDesignTimeDbContextFactory<Vistor
     public VistoraDbContext CreateDbContext(string[] args)
     {
         var options = new DbContextOptionsBuilder<VistoraDbContext>()
-            .UseNpgsql("Host=localhost;Database=vistora;Username=vistora;Password=change-me")
+            .UseNpgsql(
+                "Host=localhost;Database=vistora;Username=vistora;Password=change-me",
+                npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public"))
             .Options;
 
         return new VistoraDbContext(options, new TenantContext());

@@ -14,10 +14,12 @@ public static class ChecklistTemplatesEndpoints
     public static IEndpointRouteBuilder MapChecklistTemplatesEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapPost("/api/v1/checklist-templates", CreateChecklistTemplate)
+            .RequireAuthorization()
             .WithName("CreateChecklistTemplate")
             .WithTags("ChecklistTemplates");
 
         endpoints.MapPost("/api/v1/inspections", CreateInspection)
+            .RequireAuthorization()
             .WithName("CreateInspection")
             .WithTags("Inspections");
 

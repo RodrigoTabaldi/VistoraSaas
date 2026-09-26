@@ -13,6 +13,7 @@ public sealed class VistoraDbContext(
 
     public DbSet<Organization> Organizations => Set<Organization>();
     public DbSet<User> Users => Set<User>();
+    public DbSet<Account> Accounts => Set<Account>();
     public DbSet<Property> Properties => Set<Property>();
     public DbSet<Unit> Units => Set<Unit>();
     public DbSet<ChecklistTemplate> ChecklistTemplates => Set<ChecklistTemplate>();
@@ -50,6 +51,24 @@ public sealed class VistoraDbContext(
             entity.Property(x => x.Email).HasMaxLength(320).IsRequired();
             entity.Property(x => x.Role).HasMaxLength(64).IsRequired();
             entity.HasIndex(x => new { x.OrganizationId, x.Email }).IsUnique();
+            entity.HasAlternateKey(x => new { x.OrganizationId, x.Id });
+        });
+        modelBuilder.Entity<Account>(entity =>
+        {
+            entity.ToTable("accounts");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.OrganizationId).HasColumnName("organization_id").IsRequired();
+            entity.Property(x => x.Name).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.Email).HasMaxLength(320).IsRequired();
+            entity.Property(x => x.NormalizedEmail).HasMaxLength(320).IsRequired();
+            entity.Property(x => x.PasswordHash).HasMaxLength(512).IsRequired();
+            entity.Property(x => x.Role).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.CreatedAtUtc).IsRequired();
+            entity.HasIndex(x => x.NormalizedEmail).IsUnique();
+            entity.HasOne(x => x.User).WithOne()
+                .HasForeignKey<Account>(x => new { x.OrganizationId, x.Id })
+                .HasPrincipalKey<User>(x => new { x.OrganizationId, x.Id })
+                .OnDelete(DeleteBehavior.Cascade);
         });
         modelBuilder.Entity<Property>(entity =>
         {

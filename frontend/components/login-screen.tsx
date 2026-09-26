@@ -2,28 +2,39 @@
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Icon } from './icons';
-import { DEMO_ACCOUNT } from '../lib/demo-account';
+import { apiRequest } from '../lib/api-client';
 
 export function LoginScreen() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSubmitting) return;
 
     const formData = new FormData(event.currentTarget);
     const email = String(formData.get('email') ?? '').trim().toLowerCase();
     const password = String(formData.get('password') ?? '');
-
-    if (email !== DEMO_ACCOUNT.email || password !== DEMO_ACCOUNT.password) {
-      setError('Use as credenciais da conta demonstração para continuar.');
-      return;
-    }
+    const rememberMe = formData.get('rememberMe') === 'on';
 
     setError('');
-    router.push('/dashboard');
+    setIsSubmitting(true);
+    try {
+      await apiRequest('/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password, rememberMe }),
+      });
+      router.replace('/dashboard');
+      router.refresh();
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'Não foi possível entrar.');
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -69,16 +80,17 @@ export function LoginScreen() {
             </div>
 
             <div className="login-options">
-              <label className="checkbox-label"><input type="checkbox" defaultChecked /> <span>Lembrar-me</span></label>
-              <a href="#forgot-password">Esqueci a senha?</a>
+              <label className="checkbox-label"><input type="checkbox" name="rememberMe" defaultChecked /> <span>Lembrar-me</span></label>
             </div>
 
             {error ? <p className="login-error" role="alert">{error}</p> : null}
 
-            <button className="button button--primary login-submit" type="submit">Entrar <Icon name="arrowRight" size={19} /></button>
+            <button className="button button--primary login-submit" type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Entrando…' : 'Entrar'} <Icon name="arrowRight" size={19} />
+            </button>
           </form>
 
-          <p className="login-signup">Novo por aqui? <a href="#demo">Solicite uma demonstração</a></p>
+          <p className="login-signup">Ainda não tem conta? <Link href="/cadastro">Criar conta</Link></p>
         </div>
 
         <p className="login-privacy"><Icon name="shield" size={15} /> Seus dados protegidos e conexão segura.</p>

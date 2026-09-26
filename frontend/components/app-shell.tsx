@@ -1,9 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { Icon, type IconName } from './icons';
+import { apiRequest } from '../lib/api-client';
+
+interface CurrentUser {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+  organizationId: string;
+}
 
 const navigation: Array<{ href: string; label: string; icon: IconName }> = [
   { href: '/dashboard', label: 'Home', icon: 'home' },
@@ -18,7 +27,45 @@ const navigation: Array<{ href: string; label: string; icon: IconName }> = [
 
 export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    apiRequest<CurrentUser>('/api/v1/me')
+      .then((user) => {
+        if (active) {
+          setCurrentUser(user);
+          setIsAuthorized(true);
+        }
+      })
+      .catch(() => {
+        if (active) router.replace('/');
+      });
+
+    return () => { active = false; };
+  }, [router]);
+
+  async function handleLogout() {
+    try {
+      await apiRequest('/api/v1/auth/logout', { method: 'POST' });
+    } catch {
+      // Leave the protected area even if the API is temporarily unavailable.
+    }
+    router.replace('/');
+    router.refresh();
+  }
+
+  if (!isAuthorized || !currentUser) {
+    return <main className="auth-loading" role="status">Verificando acesso…</main>;
+  }
+
+  const initials = currentUser.name.trim().split(/\s+/).slice(0, 2)
+    .map((part) => part[0]?.toLocaleUpperCase('pt-BR') ?? '')
+    .join('') || 'US';
+  const roleLabel = currentUser.role === 'Admin' ? 'Administrador' : currentUser.role;
 
   return (
     <div className="app-shell">
@@ -56,9 +103,10 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
           <div className="topbar-spacer" />
           <div className="topbar-actions">
             <button className="icon-button" type="button" aria-label="Notificações"><Icon name="bell" size={21} /><span className="notification-dot" /></button>
+            <button className="icon-button" type="button" aria-label="Sair da conta" title="Sair da conta" onClick={handleLogout}><Icon name="logout" size={19} /></button>
             <div className="user-menu">
-              <span className="avatar avatar--large">BA</span>
-              <span className="user-info"><strong>Bruno Almeida</strong><span>Administrador</span></span>
+              <span className="avatar avatar--large">{initials}</span>
+              <span className="user-info"><strong>{currentUser.name}</strong><span>{roleLabel}</span></span>
               <Icon name="chevronDown" size={16} />
             </div>
             <Link className="button button--primary topbar-cta" href="/triagens/nova"><Icon name="plus" size={18} /> Nova triagem</Link>
