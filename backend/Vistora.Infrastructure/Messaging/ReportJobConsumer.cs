@@ -15,8 +15,6 @@ public sealed class ReportJobConsumer(
     IServiceScopeFactory serviceScopeFactory,
     ILogger<ReportJobConsumer> logger) : BackgroundService
 {
-    private const string QueuePending = "vistora.report-jobs.pending";
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -25,6 +23,8 @@ public sealed class ReportJobConsumer(
             {
                 var connection = await connectionFactory.CreateConnectionAsync(stoppingToken);
                 var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
+
+                await RabbitMqReportJobTopology.DeclareAsync(channel, stoppingToken);
 
                 await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 10, global: false, cancellationToken: stoppingToken);
 
@@ -74,12 +74,12 @@ public sealed class ReportJobConsumer(
                 };
 
                 await channel.BasicConsumeAsync(
-                    queue: QueuePending,
+                    queue: RabbitMqReportJobTopology.QueuePending,
                     autoAck: false,
                     consumer: consumer,
                     cancellationToken: stoppingToken);
 
-                logger.LogInformation("ReportJobConsumer started listening on '{Queue}'.", QueuePending);
+                logger.LogInformation("ReportJobConsumer started listening on '{Queue}'.", RabbitMqReportJobTopology.QueuePending);
 
                 var tcs = new TaskCompletionSource();
                 using var reg = stoppingToken.Register(() => tcs.TrySetResult());
