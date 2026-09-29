@@ -10,7 +10,10 @@ interface ApiErrorResponse {
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  if (init.body && !headers.has('Content-Type')) {
+  if (init.method && !['GET', 'HEAD', 'OPTIONS'].includes(init.method.toUpperCase())) {
+    headers.set('X-Vistora-Request', '1');
+  }
+  if (init.body && !(init.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
 
@@ -31,8 +34,8 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
       ? Object.values(body.errors).flat()[0]
       : undefined;
     const message = response.status === 401
-      ? 'E-mail ou senha inválidos.'
-      : response.status === 409 || body?.code === 'email_in_use'
+      ? path.endsWith('/auth/login') ? 'E-mail ou senha inválidos.' : 'Sua sessão expirou. Entre novamente.'
+      : body?.code === 'email_in_use'
         ? 'Já existe uma conta com esse e-mail.'
         : response.status === 429
           ? 'Muitas tentativas. Aguarde um minuto e tente novamente.'

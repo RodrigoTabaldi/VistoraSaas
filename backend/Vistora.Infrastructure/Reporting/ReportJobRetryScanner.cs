@@ -44,8 +44,21 @@ public sealed class ReportJobRetryScanner(
 
                         var orgDbContext = orgScope.ServiceProvider.GetRequiredService<IVistoraDbContext>();
 
+                        var staleBefore = DateTimeOffset.UtcNow.AddMinutes(-30);
+                        var stalledJobs = await orgDbContext.ReportJobs
+                            .Where(j => j.Status == ReportJobStatus.Processing && j.StartedAtUtc < staleBefore)
+                            .ToListAsync(stoppingToken);
+                        foreach (var job in stalledJobs)
+                        {
+                            job.Status = job.Attempts < job.MaxAttempts
+                                ? ReportJobStatus.Pending : ReportJobStatus.Failed;
+                            job.ErrorMessage = "Report worker stopped before completing this attempt.";
+                        }
+                        if (stalledJobs.Count > 0)
+                            await orgDbContext.SaveChangesAsync(stoppingToken);
+
                         var pendingRetryJobs = await orgDbContext.ReportJobs
-                            .Where(j => j.Status == ReportJobStatus.Pending && j.Attempts > 0)
+                            .Where(j => j.Status == ReportJobStatus.Pending)
                             .ToListAsync(stoppingToken);
 
                         foreach (var job in pendingRetryJobs)

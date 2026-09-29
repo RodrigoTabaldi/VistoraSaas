@@ -7,6 +7,8 @@ public interface IPrivateObjectStorage
 
     Task DeleteAsync(string objectKey, CancellationToken cancellationToken = default);
 
+    Task<byte[]> DownloadAsync(string objectKey, long maxBytes, CancellationToken cancellationToken = default);
+
     Uri CreateDownloadUrl(string objectKey, TimeSpan lifetime);
 }
 

@@ -1,98 +1,87 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { inspections as seedInspections, type InspectionRow, type InspectionStatus } from './mock-data';
+import { apiRequest } from './api-client';
+import type { InspectionRow } from './mock-data';
 
-const STORAGE_KEY = 'vistora.inspections.v1';
-
-export type CreateInspectionInput = {
-  property: string;
-  city: string;
-  type: InspectionRow['type'];
-  responsible: string;
-  responsibleInitials: string;
-  responsibleTone: string;
-  date: string;
-  time: string;
+type ApiInspection = {
+  id: string;
+  unitId: string;
+  type: 'MoveIn' | 'MoveOut';
+  status: 'Draft' | 'Completed' | 'Approved';
+  createdAtUtc: string;
 };
+type Property = { id: string; name: string; address: string };
+type Unit = { id: string; propertyId: string; identifier: string };
 
 type InspectionStoreValue = {
   inspections: InspectionRow[];
   hydrated: boolean;
-  createInspection: (input: CreateInspectionInput) => InspectionRow;
-  completeInspection: (id: string) => void;
-  updateInspectionStatus: (id: string, status: InspectionStatus) => void;
+  error: string;
+  refresh: () => Promise<void>;
+  completeInspection: (id: string) => Promise<void>;
   getInspection: (id: string) => InspectionRow | undefined;
 };
 
 const InspectionStoreContext = createContext<InspectionStoreValue | null>(null);
 
-function isInspectionList(value: unknown): value is InspectionRow[] {
-  return Array.isArray(value) && value.every((item) => (
-    item && typeof item === 'object' &&
-    typeof (item as InspectionRow).id === 'string' &&
-    typeof (item as InspectionRow).property === 'string' &&
-    typeof (item as InspectionRow).status === 'string'
-  ));
-}
-
-export function InspectionProvider({ children }: Readonly<{ children: React.ReactNode }>) {
-  const [items, setItems] = useState<InspectionRow[]>(seedInspections);
+export function InspectionProvider({ children, organizationId }: Readonly<{ children: React.ReactNode; organizationId: string }>) {
+  const [items, setItems] = useState<InspectionRow[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [error, setError] = useState('');
+
+  const refresh = useCallback(async () => {
+    const [inspections, properties] = await Promise.all([
+      apiRequest<ApiInspection[]>('/api/v1/inspections'),
+      apiRequest<Property[]>('/api/v1/properties'),
+    ]);
+    const unitLists = await Promise.all(properties.map((property) =>
+      apiRequest<Unit[]>(`/api/v1/properties/${property.id}/units`)));
+    const units = new Map(unitLists.flat().map((unit) => [unit.id, unit]));
+    const propertyById = new Map(properties.map((property) => [property.id, property]));
+    setItems(inspections.map((inspection) => {
+      const unit = units.get(inspection.unitId);
+      const property = unit ? propertyById.get(unit.propertyId) : undefined;
+      const created = new Date(inspection.createdAtUtc);
+      const completed = inspection.status !== 'Draft';
+      return {
+        id: inspection.id,
+        code: `VIS-${inspection.id.slice(0, 8).toUpperCase()}`,
+        property: property?.name ?? 'Imóvel não encontrado',
+        city: [property?.address, unit?.identifier].filter(Boolean).join(' · '),
+        type: inspection.type === 'MoveIn' ? 'Entrada' : 'Saída',
+        responsible: 'Não atribuído',
+        responsibleInitials: 'NA',
+        responsibleTone: 'slate',
+        date: created.toLocaleDateString('pt-BR'),
+        time: created.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        status: completed ? 'Concluída' : 'Em andamento',
+        progress: completed ? 100 : 0,
+      };
+    }));
+    setError('');
+  }, []);
 
   useEffect(() => {
+    refresh().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : 'Não foi possível carregar as vistorias.'))
+      .finally(() => setHydrated(true));
+  }, [refresh, organizationId]);
+
+  const completeInspection = useCallback(async (id: string) => {
     try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed: unknown = JSON.parse(stored);
-        if (isInspectionList(parsed)) setItems(parsed);
-      }
-    } catch {
-      // If local storage is unavailable or corrupted, the seeded demo remains usable.
-    } finally {
-      setHydrated(true);
+      await apiRequest(`/api/v1/inspections/${id}/complete`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+      });
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível concluir a vistoria.');
     }
-  }, []);
-
-  useEffect(() => {
-    if (hydrated) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  }, [hydrated, items]);
-
-  const createInspection = useCallback((input: CreateInspectionInput) => {
-    const created: InspectionRow = {
-      ...input,
-      id: `local-${Date.now()}`,
-      code: `VIS-2024-${String(items.length + 1).padStart(3, '0')}`,
-      status: 'Agendada',
-      progress: 0,
-    };
-    setItems((current) => [created, ...current]);
-    return created;
-  }, [items.length]);
-
-  const completeInspection = useCallback((id: string) => {
-    setItems((current) => current.map((item) => item.id === id
-      ? { ...item, status: 'Concluída', progress: 100 }
-      : item));
-  }, []);
-
-  const updateInspectionStatus = useCallback((id: string, status: InspectionStatus) => {
-    setItems((current) => current.map((item) => item.id === id
-      ? { ...item, status, progress: status === 'Concluída' ? 100 : item.progress }
-      : item));
-  }, []);
+  }, [refresh]);
 
   const getInspection = useCallback((id: string) => items.find((item) => item.id === id), [items]);
-
-  const value = useMemo(() => ({
-    inspections: items,
-    hydrated,
-    createInspection,
-    completeInspection,
-    updateInspectionStatus,
-    getInspection,
-  }), [completeInspection, createInspection, getInspection, hydrated, items, updateInspectionStatus]);
-
+  const value = useMemo(() => ({ inspections: items, hydrated, error, refresh, completeInspection, getInspection }),
+    [items, hydrated, error, refresh, completeInspection, getInspection]);
   return <InspectionStoreContext.Provider value={value}>{children}</InspectionStoreContext.Provider>;
 }
 

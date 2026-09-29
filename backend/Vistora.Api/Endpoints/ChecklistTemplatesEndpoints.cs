@@ -2,10 +2,12 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.EntityFrameworkCore;
 using Vistora.Application.Idempotency;
 using Vistora.Application.Persistence;
 using Vistora.Application.UseCases;
 using Vistora.Domain;
+using Vistora.Infrastructure.Persistence.PostgreSql;
 
 namespace Vistora.Api.Endpoints;
 
@@ -13,13 +15,22 @@ public static class ChecklistTemplatesEndpoints
 {
     public static IEndpointRouteBuilder MapChecklistTemplatesEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapPost("/api/v1/checklist-templates", CreateChecklistTemplate)
+        endpoints.MapGet("/api/v1/checklist-templates", async (VistoraDbContext db, CancellationToken cancellationToken) =>
+            Results.Ok(await db.ChecklistTemplates.AsNoTracking()
+                .Where(template => template.IsActive)
+                .OrderBy(template => template.Name)
+                .Select(template => new { template.Id, template.Name })
+                .ToListAsync(cancellationToken)))
             .RequireAuthorization()
+            .WithTags("ChecklistTemplates");
+
+        endpoints.MapPost("/api/v1/checklist-templates", CreateChecklistTemplate)
+            .RequireAuthorization(AccessPolicies.ManageOrganization)
             .WithName("CreateChecklistTemplate")
             .WithTags("ChecklistTemplates");
 
-        endpoints.MapPost("/api/v1/inspections", CreateInspection)
-            .RequireAuthorization()
+        endpoints.MapPost("/api/v1/inspections/from-template", CreateInspection)
+            .RequireAuthorization(AccessPolicies.EditInspection)
             .WithName("CreateInspection")
             .WithTags("Inspections");
 

@@ -6,6 +6,8 @@ RUN npm ci
 
 FROM node:24-alpine AS build
 WORKDIR /app
+ARG VISTORA_API_URL=http://api:8080
+ENV VISTORA_API_URL=${VISTORA_API_URL}
 COPY --from=deps /app/node_modules ./node_modules
 COPY frontend/ ./
 RUN npm run build

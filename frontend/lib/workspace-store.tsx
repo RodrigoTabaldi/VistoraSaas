@@ -88,13 +88,13 @@ function readAsDataUrl(file: File) {
   });
 }
 
-export function WorkspaceProvider({ children }: Readonly<{ children: ReactNode }>) {
+export function WorkspaceProvider({ children, organizationId }: Readonly<{ children: ReactNode; organizationId: string }>) {
   const [state, setState] = useState<WorkspaceState>(seed);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
+      const raw = window.localStorage.getItem(`${STORAGE_KEY}.${organizationId}`);
       if (raw) {
         const parsed: unknown = JSON.parse(raw);
         if (isWorkspaceState(parsed)) setState({ ...seed, ...parsed, settings: { ...seed.settings, ...parsed.settings } });
@@ -104,11 +104,11 @@ export function WorkspaceProvider({ children }: Readonly<{ children: ReactNode }
     } finally {
       setHydrated(true);
     }
-  }, []);
+  }, [organizationId]);
 
   useEffect(() => {
-    if (hydrated) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [hydrated, state]);
+    if (hydrated) window.localStorage.setItem(`${STORAGE_KEY}.${organizationId}`, JSON.stringify(state));
+  }, [hydrated, state, organizationId]);
 
   const addProperty = useCallback((input: Pick<PropertyRecord, 'name' | 'address' | 'units'>) => {
     setState((current) => ({ ...current, properties: [{ ...input, id: `property-${Date.now()}`, inspections: 0, occupancy: '—' }, ...current.properties] }));

@@ -7,27 +7,25 @@ import { Avatar, ProgressBar, StatusBadge } from './dashboard-primitives';
 import type { InspectionStatus } from '../lib/mock-data';
 import { useInspections } from '../lib/inspection-store';
 
-const statusOptions: Array<'Todos os status' | InspectionStatus> = ['Todos os status', 'Agendada', 'Em andamento', 'Concluída', 'Pendente', 'Atrasada'];
+const statusOptions: Array<'Todos os status' | InspectionStatus> = ['Todos os status', 'Em andamento', 'Concluída'];
 
 export function InspectionsTable({ entityLabel = 'vistorias' }: Readonly<{ entityLabel?: 'triagens' | 'vistorias' }>) {
-  const { inspections, completeInspection } = useInspections();
+  const { inspections, completeInspection, error } = useInspections();
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<(typeof statusOptions)[number]>('Todos os status');
-  const [responsible, setResponsible] = useState('Todos os responsáveis');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
   const filteredInspections = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return inspections.filter((inspection) => {
       const matchesStatus = status === 'Todos os status' || inspection.status === status;
-      const matchesResponsible = responsible === 'Todos os responsáveis' || inspection.responsible === responsible;
       const matchesQuery = !normalizedQuery || [inspection.code, inspection.property, inspection.city, inspection.responsible].some((field) => field.toLowerCase().includes(normalizedQuery));
-      return matchesStatus && matchesResponsible && matchesQuery;
+      return matchesStatus && matchesQuery;
     });
-  }, [inspections, query, responsible, status]);
+  }, [inspections, query, status]);
 
   function exportInspections() {
-    const header = ['Código', 'Imóvel', 'Tipo', 'Responsável', 'Data', 'Status', 'Progresso'];
+    const header = ['Código', 'Imóvel', 'Tipo', 'Responsável', 'Criada em', 'Status', 'Progresso'];
     const rows = filteredInspections.map((inspection) => [inspection.code, inspection.property, inspection.type, inspection.responsible, `${inspection.date} ${inspection.time}`, inspection.status, `${inspection.progress}%`]);
     const csv = [header, ...rows].map((row) => row.map((value) => `"${value.replaceAll('"', '""')}"`).join(';')).join('\n');
     const url = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' }));
@@ -43,16 +41,15 @@ export function InspectionsTable({ entityLabel = 'vistorias' }: Readonly<{ entit
       <div className="list-toolbar">
         <label className="list-search"><Icon name="search" size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Buscar ${entityLabel}...`} aria-label={`Buscar ${entityLabel}`} /></label>
         <label className="toolbar-select"><select value={status} onChange={(event) => setStatus(event.target.value as (typeof statusOptions)[number])} aria-label="Filtrar por status">{statusOptions.map((option) => <option key={option}>{option}</option>)}</select><Icon name="chevronDown" size={14} /></label>
-        <label className="toolbar-select"><select value={responsible} onChange={(event) => setResponsible(event.target.value)} aria-label="Filtrar por responsável"><option>Todos os responsáveis</option><option>Carla Mendes</option><option>Rafael Lima</option><option>Juliana Costa</option></select><Icon name="chevronDown" size={14} /></label>
-        <label className="toolbar-select"><span>01/04/2024 - 30/04/2024</span><Icon name="calendar" size={15} /></label>
         <button className="button button--soft" type="button" onClick={exportInspections}><Icon name="download" size={16} /> Exportar</button>
         <div className="toolbar-spacer" />
         <div className="view-switch" aria-label="Modo de visualização"><button className={viewMode === 'list' ? 'active' : ''} type="button" aria-label="Visualização em lista" onClick={() => setViewMode('list')}><Icon name="list" size={17} /></button><button className={viewMode === 'grid' ? 'active' : ''} type="button" aria-label="Visualização em cards" onClick={() => setViewMode('grid')}><Icon name="grid" size={16} /></button></div>
       </div>
+      {error && <p className="form-feedback form-feedback--error" role="alert">{error}</p>}
 
       {viewMode === 'list' ? (
         <div className="table-panel">
-          <table className="data-table list-table"><thead><tr><th><input className="row-check" type="checkbox" aria-label="Selecionar todas" /></th><th>Código</th><th>Imóvel</th><th>Tipo</th><th>Responsável</th><th>Data</th><th>Status</th><th>Progresso</th><th>Ações</th></tr></thead>
+          <table className="data-table list-table"><thead><tr><th><input className="row-check" type="checkbox" aria-label="Selecionar todas" /></th><th>Código</th><th>Imóvel</th><th>Tipo</th><th>Responsável</th><th>Criada em</th><th>Status</th><th>Progresso</th><th>Ações</th></tr></thead>
             <tbody>{filteredInspections.map((inspection) => <tr key={inspection.id}>
               <td><input className="row-check" type="checkbox" aria-label={`Selecionar ${inspection.code}`} /></td>
               <td className="code-cell"><Link href={`/vistorias/${inspection.id}`}>{inspection.code}</Link></td>

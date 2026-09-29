@@ -2,86 +2,107 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Icon } from './icons';
+import { apiRequest } from '../lib/api-client';
+import { useCurrentUser } from '../lib/auth-context';
 import { useInspections } from '../lib/inspection-store';
-import type { InspectionRow } from '../lib/mock-data';
 
-const propertyOptions = [
-  { property: 'Residencial Vista Verde', city: 'São Paulo, SP', unit: 'Bloco B · Apto 102' },
-  { property: 'Condomínio Parque das Flores', city: 'Osasco, SP', unit: 'Torre 2 · Apto 804' },
-  { property: 'Edifício Solar Paulista', city: 'São Paulo, SP', unit: 'Apto 302' },
-  { property: 'Condomínio Bela Vista', city: 'Santo André, SP', unit: 'Bloco A · Apto 41' },
-  { property: 'Residencial Harmonia', city: 'São Bernardo do Campo, SP', unit: 'Casa 12' },
-];
-
-const responsibleOptions = [
-  { name: 'Carla Mendes', initials: 'CM', tone: 'rose' },
-  { name: 'Rafael Lima', initials: 'RL', tone: 'blue' },
-  { name: 'Juliana Costa', initials: 'JC', tone: 'purple' },
-  { name: 'Lucas Ferreira', initials: 'LF', tone: 'slate' },
-];
-
-function formatDate(value: string) {
-  const date = new Date(`${value}T12:00:00`);
-  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).replace('.', '');
-}
+type Property = { id: string; name: string };
+type Unit = { id: string; identifier: string };
+type Template = { id: string; name: string };
 
 export function TriageCreateForm() {
+  const role = useCurrentUser().role;
+  const canManageTemplates = role === 'Admin';
+  const canCreateInspection = role === 'Admin' || role === 'Vistoriador';
   const router = useRouter();
-  const { createInspection } = useInspections();
-  const [property, setProperty] = useState(propertyOptions[0].property);
-  const [unit, setUnit] = useState(propertyOptions[0].unit);
-  const [type, setType] = useState<InspectionRow['type']>('Entrada');
-  const [responsible, setResponsible] = useState(responsibleOptions[0].name);
-  const [date, setDate] = useState('2024-04-18');
-  const [time, setTime] = useState('09:00');
-  const [checklist, setChecklist] = useState('Checklist residencial completo');
+  const { refresh } = useInspections();
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
+  const [propertyId, setPropertyId] = useState('');
+  const [unitId, setUnitId] = useState('');
+  const [templateId, setTemplateId] = useState('');
+  const [type, setType] = useState<'MoveIn' | 'MoveOut'>('MoveIn');
+  const [templateName, setTemplateName] = useState('');
+  const [roomName, setRoomName] = useState('');
+  const [itemDescription, setItemDescription] = useState('');
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const selectedProperty = propertyOptions.find((item) => item.property === property) ?? propertyOptions[0];
-  const selectedResponsible = responsibleOptions.find((item) => item.name === responsible) ?? responsibleOptions[0];
+  useEffect(() => {
+    Promise.all([
+      apiRequest<Property[]>('/api/v1/properties'),
+      apiRequest<Template[]>('/api/v1/checklist-templates'),
+    ]).then(([propertyList, templateList]) => {
+      setProperties(propertyList);
+      setTemplates(templateList);
+      setPropertyId(propertyList[0]?.id ?? '');
+      setTemplateId(templateList[0]?.id ?? (canManageTemplates ? 'new' : ''));
+    }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : 'Não foi possível carregar o formulário.'));
+  }, [canManageTemplates]);
 
-  function handlePropertyChange(value: string) {
-    setProperty(value);
-    const next = propertyOptions.find((item) => item.property === value);
-    if (next) setUnit(next.unit);
-  }
+  useEffect(() => {
+    if (!propertyId) { setUnits([]); setUnitId(''); return; }
+    let active = true;
+    apiRequest<Unit[]>(`/api/v1/properties/${propertyId}/units`)
+      .then((items) => { if (active) { setUnits(items); setUnitId(items[0]?.id ?? ''); } })
+      .catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : 'Não foi possível carregar as unidades.'); });
+    return () => { active = false; };
+  }, [propertyId]);
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!property || !unit || !date || !time) {
-      setError('Preencha imóvel, unidade, data e horário para criar a triagem.');
-      return;
+    if (!unitId) { setError('Cadastre uma unidade para este imóvel antes de criar a vistoria.'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      let selectedTemplateId = templateId;
+      if (templateId === 'new') {
+        if (!canManageTemplates) throw new Error('Somente administradores podem criar modelos de checklist.');
+        if (!templateName.trim() || !roomName.trim() || !itemDescription.trim()) {
+          throw new Error('Informe o nome do checklist, um ambiente e um item.');
+        }
+        const created = await apiRequest<{ checklistTemplateId: string }>('/api/v1/checklist-templates', {
+          method: 'POST',
+          headers: { 'Idempotency-Key': crypto.randomUUID() },
+          body: JSON.stringify({ name: templateName, rooms: [{ name: roomName, position: 0, items: [{ description: itemDescription, position: 0 }] }] }),
+        });
+        selectedTemplateId = created.checklistTemplateId;
+        setTemplates((current) => [...current, { id: selectedTemplateId, name: templateName }]);
+        setTemplateId(selectedTemplateId);
+      }
+      if (!selectedTemplateId) throw new Error('Selecione ou crie um modelo de checklist.');
+      const created = await apiRequest<{ inspectionId: string }>('/api/v1/inspections/from-template', {
+        method: 'POST',
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({ unitId, checklistTemplateId: selectedTemplateId, type }),
+      });
+      await refresh();
+      router.push(`/vistorias/${created.inspectionId}`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível criar a vistoria.');
+    } finally {
+      setSaving(false);
     }
-
-    createInspection({
-      property,
-      city: selectedProperty.city,
-      type,
-      responsible: selectedResponsible.name,
-      responsibleInitials: selectedResponsible.initials,
-      responsibleTone: selectedResponsible.tone,
-      date: formatDate(date),
-      time,
-    });
-    router.push('/triagens?created=1');
   }
 
-  return (
-    <form className="triage-form" onSubmit={handleSubmit}>
-      <div className="triage-form-intro"><span className="triage-form-icon"><Icon name="clipboard" size={22} /></span><div><h2>Dados da triagem</h2><p>Defina o contexto inicial. O checklist poderá ser preenchido durante a execução.</p></div></div>
-      <div className="form-grid">
-        <label className="form-field"><span>Imóvel</span><select value={property} onChange={(event) => handlePropertyChange(event.target.value)}>{propertyOptions.map((item) => <option key={item.property}>{item.property}</option>)}</select></label>
-        <label className="form-field"><span>Unidade</span><input value={unit} onChange={(event) => setUnit(event.target.value)} placeholder="Ex.: Bloco A · Apto 101" required /></label>
-        <label className="form-field"><span>Tipo de triagem</span><select value={type} onChange={(event) => setType(event.target.value as InspectionRow['type'])}><option>Entrada</option><option>Saída</option><option>Periódica</option></select></label>
-        <label className="form-field"><span>Responsável</span><select value={responsible} onChange={(event) => setResponsible(event.target.value)}>{responsibleOptions.map((item) => <option key={item.name}>{item.name}</option>)}</select></label>
-        <label className="form-field"><span>Data</span><input type="date" value={date} onChange={(event) => setDate(event.target.value)} required /></label>
-        <label className="form-field"><span>Horário</span><input type="time" value={time} onChange={(event) => setTime(event.target.value)} required /></label>
-        <label className="form-field form-field--full"><span>Checklist base</span><select value={checklist} onChange={(event) => setChecklist(event.target.value)}><option>Checklist residencial completo</option><option>Checklist de entrada</option><option>Checklist de saída</option><option>Checklist de áreas comuns</option></select><small>O checklist define os ambientes e itens que serão avaliados.</small></label>
-      </div>
-      {error && <p className="form-feedback form-feedback--error" role="alert">{error}</p>}
-      <div className="triage-form-actions"><Link className="button button--outline" href="/triagens">Cancelar</Link><button className="button button--primary" type="submit"><Icon name="plus" size={17} /> Criar triagem</button></div>
-    </form>
-  );
+  if (!canCreateInspection) return <p>Seu perfil permite apenas consultar vistorias.</p>;
+
+  return <form className="triage-form" onSubmit={handleSubmit}>
+    <div className="triage-form-intro"><span className="triage-form-icon"><Icon name="clipboard" size={22} /></span><div><h2>Dados da vistoria</h2><p>Escolha uma unidade e um checklist da sua organização.</p></div></div>
+    <div className="form-grid">
+      <label className="form-field"><span>Imóvel</span><select value={propertyId} onChange={(event) => setPropertyId(event.target.value)} required>{properties.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}</select></label>
+      <label className="form-field"><span>Unidade</span><select value={unitId} onChange={(event) => setUnitId(event.target.value)} required>{units.map((unit) => <option key={unit.id} value={unit.id}>{unit.identifier}</option>)}</select></label>
+      <label className="form-field"><span>Tipo de vistoria</span><select value={type} onChange={(event) => setType(event.target.value as 'MoveIn' | 'MoveOut')}><option value="MoveIn">Entrada</option><option value="MoveOut">Saída</option></select></label>
+      <label className="form-field"><span>Checklist base</span><select value={templateId} onChange={(event) => setTemplateId(event.target.value)} required>{templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}{canManageTemplates && <option value="new">Criar novo modelo</option>}</select></label>
+      {templateId === 'new' && <><label className="form-field"><span>Nome do checklist</span><input value={templateName} onChange={(event) => setTemplateName(event.target.value)} maxLength={200} required /></label><label className="form-field"><span>Primeiro ambiente</span><input value={roomName} onChange={(event) => setRoomName(event.target.value)} maxLength={200} required /></label><label className="form-field form-field--full"><span>Primeiro item</span><input value={itemDescription} onChange={(event) => setItemDescription(event.target.value)} maxLength={1000} required /></label></>}
+    </div>
+    {!properties.length && <p>Cadastre um imóvel e uma unidade na página <Link href="/imoveis">Imóveis</Link>.</p>}
+    {!templates.length && !canManageTemplates && <p>Peça a um administrador para cadastrar um modelo de checklist.</p>}
+    {propertyId && !units.length && <p>O imóvel selecionado ainda não tem unidades.</p>}
+    {error && <p className="form-feedback form-feedback--error" role="alert">{error}</p>}
+    <div className="triage-form-actions"><Link className="button button--outline" href="/triagens">Cancelar</Link><button className="button button--primary" type="submit" disabled={saving || !unitId}><Icon name="plus" size={17} /> {saving ? 'Criando...' : 'Criar vistoria'}</button></div>
+  </form>;
 }

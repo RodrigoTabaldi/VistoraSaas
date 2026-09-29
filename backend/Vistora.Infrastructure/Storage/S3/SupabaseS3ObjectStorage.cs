@@ -40,6 +40,26 @@ public sealed class SupabaseS3ObjectStorage(
         await client.DeleteObjectAsync(_options.Bucket, objectKey, cancellationToken);
     }
 
+    public async Task<byte[]> DownloadAsync(string objectKey, long maxBytes, CancellationToken cancellationToken = default)
+    {
+        ValidateObjectKey(objectKey);
+        if (maxBytes <= 0) throw new ArgumentOutOfRangeException(nameof(maxBytes));
+        using var response = await client.GetObjectAsync(_options.Bucket, objectKey, cancellationToken);
+        if (response.ContentLength > maxBytes)
+            throw new InvalidDataException("Stored object exceeds the download limit.");
+
+        using var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        int count;
+        while ((count = await response.ResponseStream.ReadAsync(chunk, cancellationToken)) > 0)
+        {
+            if (buffer.Length + count > maxBytes)
+                throw new InvalidDataException("Stored object exceeds the download limit.");
+            buffer.Write(chunk, 0, count);
+        }
+        return buffer.ToArray();
+    }
+
     public Uri CreateDownloadUrl(string objectKey, TimeSpan lifetime)
     {
         ValidateObjectKey(objectKey);

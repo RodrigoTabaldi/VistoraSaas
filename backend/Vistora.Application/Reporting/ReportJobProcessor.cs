@@ -23,7 +23,7 @@ public sealed class ReportJobProcessor(
             return;
         }
 
-        if (job.Status is ReportJobStatus.Completed or ReportJobStatus.Failed)
+        if (job.Status != ReportJobStatus.Pending)
         {
             logger.LogWarning(
                 "ReportJob '{ReportJobId}' has already been processed with status '{Status}'. Ignoring duplicate queue message.",
@@ -36,7 +36,15 @@ public sealed class ReportJobProcessor(
         job.StartedAtUtc = DateTimeOffset.UtcNow;
         job.Attempts += 1;
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            logger.LogInformation("ReportJob '{ReportJobId}' was claimed by another worker.", reportJobId);
+            return;
+        }
 
         try
         {

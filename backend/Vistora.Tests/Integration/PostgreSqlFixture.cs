@@ -32,6 +32,9 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
         .Build();
 
     private string? _appConnectionString;
+    public string AdministratorConnectionString => _container.GetConnectionString();
+    public string ApplicationConnectionString => _appConnectionString
+        ?? throw new InvalidOperationException("InitializeAsync must run before accessing the application connection.");
 
     public async Task InitializeAsync()
     {

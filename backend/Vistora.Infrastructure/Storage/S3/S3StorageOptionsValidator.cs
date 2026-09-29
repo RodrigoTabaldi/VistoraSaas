@@ -8,9 +8,12 @@ public sealed class S3StorageOptionsValidator : IValidateOptions<S3StorageOption
     {
         var failures = new List<string>();
 
-        if (!Uri.TryCreate(options.Endpoint, UriKind.Absolute, out var endpoint) || endpoint.Scheme != Uri.UriSchemeHttps)
+        if (!Uri.TryCreate(options.Endpoint, UriKind.Absolute, out var endpoint) ||
+            (endpoint.Scheme != Uri.UriSchemeHttps &&
+             !(options.AllowInsecureLocalEndpoint && endpoint.Scheme == Uri.UriSchemeHttp &&
+               endpoint.Host is "minio" or "localhost" or "127.0.0.1")))
         {
-            failures.Add("Storage:S3:Endpoint must be an absolute HTTPS URL.");
+            failures.Add("Storage:S3:Endpoint must be HTTPS, except for an explicitly enabled local MinIO endpoint.");
         }
 
         if (string.IsNullOrWhiteSpace(options.Region)) failures.Add("Storage:S3:Region is required.");

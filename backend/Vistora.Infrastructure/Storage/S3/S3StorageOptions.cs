@@ -13,4 +13,5 @@ public sealed class S3StorageOptions
     public string AccessKeyId { get; init; } = string.Empty;
 
     public string SecretAccessKey { get; init; } = string.Empty;
+    public bool AllowInsecureLocalEndpoint { get; init; }
 }

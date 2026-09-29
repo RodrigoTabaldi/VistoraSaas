@@ -33,4 +33,23 @@ public sealed class S3StorageOptionsValidatorTests
 
         Assert.True(result.Failed);
     }
+
+    [Fact]
+    public void Validate_accepts_only_explicit_local_http_storage()
+    {
+        var options = new S3StorageOptions
+        {
+            Endpoint = "http://minio:9000", Region = "us-east-1", Bucket = "vistora-private",
+            AccessKeyId = "local-user", SecretAccessKey = "local-secret",
+            AllowInsecureLocalEndpoint = true
+        };
+        var validator = new S3StorageOptionsValidator();
+        Assert.True(validator.Validate(Options.DefaultName, options).Succeeded);
+        Assert.True(validator.Validate(Options.DefaultName, new S3StorageOptions
+        {
+            Endpoint = "http://remote.example:9000", Region = options.Region, Bucket = options.Bucket,
+            AccessKeyId = options.AccessKeyId, SecretAccessKey = options.SecretAccessKey,
+            AllowInsecureLocalEndpoint = true
+        }).Failed);
+    }
 }

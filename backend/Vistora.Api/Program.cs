@@ -14,6 +14,8 @@ using Vistora.Infrastructure;
 using Vistora.Infrastructure.Persistence.PostgreSql;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 53L * 1024 * 1024);
+builder.Services.ConfigureHttpJsonOptions(ApiJson.Configure);
 
 builder.Services
     .AddVistoraApplication()
@@ -66,7 +68,7 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(AccessPolicies.Configure);
 if (!string.IsNullOrWhiteSpace(authority))
 {
     builder.Services.AddAuthentication()
@@ -116,12 +118,24 @@ if (app.Environment.IsDevelopment())
 {
     await using var scope = app.Services.CreateAsyncScope();
     var db = scope.ServiceProvider.GetRequiredService<VistoraDbContext>();
+    var migrationConnection = app.Configuration.GetConnectionString("PostgresMigration")
+        ?? throw new InvalidOperationException("ConnectionStrings:PostgresMigration is required in Development.");
+    db.Database.SetConnectionString(migrationConnection);
     await db.Database.MigrateAsync();
 }
 
 app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();
+app.Use(async (context, next) =>
+{
+    if (!CookieRequestGuard.IsAllowed(context))
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        return;
+    }
+    await next(context);
+});
 app.UseMiddleware<TenantResolutionMiddleware>();
 app.UseAuthorization();
 
@@ -131,7 +145,7 @@ app.MapChecklistTemplatesEndpoints();
 app.MapAccountEndpoints();
 
 var messages = app.MapGroup("/api/v1/messages");
-messages.RequireAuthorization();
+messages.RequireAuthorization(AccessPolicies.ManageOrganization);
 messages.MapPost("", async (PublishMessageRequest request, IMessageBus messageBus, CancellationToken cancellationToken) =>
 {
     if (string.IsNullOrWhiteSpace(request.Type) || request.Type.Length > 128)

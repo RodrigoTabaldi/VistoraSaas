@@ -12,8 +12,7 @@ function includesStatus(status: string, value: string) {
 
 export function TriagesPage() {
   const { inspections } = useInspections();
-  const today = Math.min(inspections.length, 5);
-  const pending = inspections.filter((item) => includesStatus(item.status, 'pendente') || includesStatus(item.status, 'agendada')).length;
+  const pending = inspections.filter((item) => !includesStatus(item.status, 'conclu')).length;
   const completed = inspections.filter((item) => includesStatus(item.status, 'conclu')).length;
   const completionRate = inspections.length ? Math.round((completed / inspections.length) * 100) : 0;
 
@@ -23,9 +22,9 @@ export function TriagesPage() {
       <div className="triage-page-actions"><Link className="button button--primary" href="/triagens/nova"><Icon name="plus" size={17} /> Nova triagem</Link></div>
 
       <section className="stats-grid stats-grid--three" aria-label="Indicadores de triagens">
-        <MetricCard icon="calendar" label="Próximas triagens" value={String(today)} trend="↗ 33%" note="na agenda de execução" />
-        <MetricCard icon="file" label="Aguardando execução" value={String(pending)} trend="↗ 12%" trendTone="bad" note="prontas para começar" tone="blue" />
-        <MetricCard icon="check" label="Taxa de conclusão" value={`${completionRate}%`} trend="↗ 8%" note="no período atual" />
+        <MetricCard icon="calendar" label="Vistorias registradas" value={String(inspections.length)} note="na organização" />
+        <MetricCard icon="file" label="Em execução" value={String(pending)} note="ainda não concluídas" tone="blue" />
+        <MetricCard icon="check" label="Taxa de conclusão" value={`${completionRate}%`} note="de todas as vistorias" />
       </section>
 
       <section className="triage-workspace">

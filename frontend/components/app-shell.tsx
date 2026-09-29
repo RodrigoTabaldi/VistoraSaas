@@ -5,14 +5,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Icon, type IconName } from './icons';
 import { apiRequest } from '../lib/api-client';
-
-interface CurrentUser {
-  userId: string;
-  name: string;
-  email: string;
-  role: string;
-  organizationId: string;
-}
+import { AuthProvider, type CurrentUser } from '../lib/auth-context';
+import { InspectionProvider } from '../lib/inspection-store';
+import { WorkspaceProvider } from '../lib/workspace-store';
 
 const navigation: Array<{ href: string; label: string; icon: IconName }> = [
   { href: '/dashboard', label: 'Home', icon: 'home' },
@@ -129,10 +124,10 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
               <span className="user-info"><strong>{currentUser.name}</strong><span>{roleLabel}</span></span>
               <Icon name="chevronDown" size={16} />
             </div>
-            <Link className="button button--primary topbar-cta" href="/triagens/nova"><Icon name="plus" size={18} /> Nova triagem</Link>
+            {currentUser.role !== 'Leitor' && <Link className="button button--primary topbar-cta" href="/triagens/nova"><Icon name="plus" size={18} /> Nova triagem</Link>}
           </div>
         </header>
-        <main className="app-content">{children}</main>
+        <main className="app-content"><AuthProvider user={currentUser}><WorkspaceProvider key={currentUser.organizationId} organizationId={currentUser.organizationId}><InspectionProvider organizationId={currentUser.organizationId}>{children}</InspectionProvider></WorkspaceProvider></AuthProvider></main>
       </div>
     </div>
   );

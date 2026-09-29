@@ -30,6 +30,14 @@ public sealed class CreateInspectionFromTemplateUseCase(IVistoraDbContext dbCont
             return new CreateInspectionResult.UnitNotFound();
         }
 
+        var relatedInspectionId = type == InspectionType.MoveOut
+            ? await dbContext.Inspections
+                .Where(x => x.UnitId == unitId && x.Type == InspectionType.MoveIn && x.Status == InspectionStatus.Approved)
+                .OrderByDescending(x => x.CompletedAtUtc)
+                .Select(x => (Guid?)x.Id)
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
+
         var now = DateTimeOffset.UtcNow;
         var inspection = new Inspection
         {
@@ -37,6 +45,7 @@ public sealed class CreateInspectionFromTemplateUseCase(IVistoraDbContext dbCont
             OrganizationId = tenantContext.OrganizationId ?? template.OrganizationId,
             UnitId = unitId,
             ChecklistTemplateId = checklistTemplateId,
+            RelatedInspectionId = relatedInspectionId,
             Type = type,
             Status = InspectionStatus.Draft,
             CreatedAtUtc = now

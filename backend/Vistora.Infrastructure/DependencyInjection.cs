@@ -50,6 +50,7 @@ using Amazon.S3;
 
           services.AddScoped<IVistoraDbContext>(sp =>
               sp.GetRequiredService<VistoraDbContext>());
+          services.AddHostedService<DatabaseRoleGuard>();
 
           services
               .AddOptions<S3StorageOptions>()
@@ -58,16 +59,13 @@ using Amazon.S3;
           services.AddSingleton<IValidateOptions<S3StorageOptions>, S3StorageOptionsValidator>();
           services.AddSingleton<IAmazonS3>(SupabaseS3ClientFactory.Create);
           services.AddSingleton<IPrivateObjectStorage, SupabaseS3ObjectStorage>();
-          services.AddSingleton<IReportPdfGenerator, PlaceholderReportPdfGenerator>();
+          services.AddScoped<IReportPdfGenerator, InspectionReportPdfGenerator>();
 
           var redisConnectionString = configuration.GetConnectionString("Redis");
           if (string.IsNullOrWhiteSpace(redisConnectionString))
           {
               throw new InvalidOperationException("ConnectionStrings:Redis must be configured.");
           }
-
-          services.AddSingleton<IConnectionMultiplexer>(
-              _ => ConnectionMultiplexer.Connect(redisConnectionString));
 
           services.AddSingleton<IIdempotencyStore, RedisIdempotencyStore>();
           services.AddScoped<IdempotencyGuard>();
