@@ -6,13 +6,18 @@ namespace Vistora.Tests;
 
 public sealed class WorkerReadinessHealthCheckTests
 {
-    [Fact]
-    public async Task CheckHealthAsync_returns_healthy()
+    [Theory]
+    [InlineData(true, true, HealthStatus.Healthy)]
+    [InlineData(false, true, HealthStatus.Unhealthy)]
+    [InlineData(true, false, HealthStatus.Unhealthy)]
+    [InlineData(false, false, HealthStatus.Unhealthy)]
+    public void Evaluate_reports_health_from_required_dependencies(
+        bool rabbitMqAvailable,
+        bool redisAvailable,
+        HealthStatus expectedStatus)
     {
-        var check = new WorkerReadinessHealthCheck();
+        var result = WorkerReadinessHealthCheck.Evaluate(rabbitMqAvailable, redisAvailable);
 
-        var result = await check.CheckHealthAsync(new HealthCheckContext());
-
-        Assert.Equal(HealthStatus.Healthy, result.Status);
+        Assert.Equal(expectedStatus, result.Status);
     }
 }

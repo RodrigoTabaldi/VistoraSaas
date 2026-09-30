@@ -14,6 +14,7 @@ public sealed class VistoraDbContext(
     public DbSet<Organization> Organizations => Set<Organization>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Account> Accounts => Set<Account>();
+    public DbSet<AccountInvitation> AccountInvitations => Set<AccountInvitation>();
     public DbSet<Property> Properties => Set<Property>();
     public DbSet<Unit> Units => Set<Unit>();
     public DbSet<ChecklistTemplate> ChecklistTemplates => Set<ChecklistTemplate>();
@@ -26,6 +27,7 @@ public sealed class VistoraDbContext(
     public DbSet<ReportJob> ReportJobs => Set<ReportJob>();
     public DbSet<ChecklistTemplateRoom> ChecklistTemplateRooms => Set<ChecklistTemplateRoom>();
     public DbSet<ChecklistTemplateItem> ChecklistTemplateItems => Set<ChecklistTemplateItem>();
+    public DbSet<InspectionAcceptance> InspectionAcceptances => Set<InspectionAcceptance>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -44,6 +46,7 @@ public sealed class VistoraDbContext(
         ConfigureTenantEntity<Report>(modelBuilder, "reports");
         ConfigureTenantEntity<AuditEvent>(modelBuilder, "audit_events");
         ConfigureTenantEntity<ReportJob>(modelBuilder, "report_jobs");
+        ConfigureTenantEntity<InspectionAcceptance>(modelBuilder, "inspection_acceptances");
         ConfigureRowVersionedEntities(modelBuilder);
 
         modelBuilder.Entity<User>(entity =>
@@ -70,6 +73,24 @@ public sealed class VistoraDbContext(
                 .HasPrincipalKey<User>(x => new { x.OrganizationId, x.Id })
                 .OnDelete(DeleteBehavior.Cascade);
         });
+        modelBuilder.Entity<AccountInvitation>(entity =>
+        {
+            // Invitation tokens are resolved before authentication establishes an organization tenant.
+            entity.ToTable("account_invitations");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Email).HasMaxLength(320).IsRequired();
+            entity.Property(x => x.NormalizedEmail).HasMaxLength(320).IsRequired();
+            entity.Property(x => x.Role).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.TokenHash).HasMaxLength(64).IsFixedLength().IsRequired();
+            entity.HasIndex(x => x.TokenHash).IsUnique();
+            entity.HasIndex(x => x.NormalizedEmail).IsUnique()
+                .HasFilter("\"AcceptedAtUtc\" IS NULL AND \"RevokedAtUtc\" IS NULL");
+            entity.HasOne<Organization>().WithMany().HasForeignKey(x => x.OrganizationId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<User>().WithMany()
+                .HasForeignKey(x => new { x.OrganizationId, x.InvitedByUserId })
+                .HasPrincipalKey(x => new { x.OrganizationId, x.Id })
+                .OnDelete(DeleteBehavior.Restrict);
+        });
         modelBuilder.Entity<Property>(entity =>
         {
             entity.Property(x => x.Name).HasMaxLength(200).IsRequired();
@@ -80,6 +101,11 @@ public sealed class VistoraDbContext(
             entity.Property(x => x.Identifier).HasMaxLength(100).IsRequired();
             entity.HasIndex(x => new { x.OrganizationId, x.PropertyId, x.Identifier }).IsUnique();
             entity.HasOne(x => x.Property).WithMany(x => x.Units).HasForeignKey(x => x.PropertyId).OnDelete(DeleteBehavior.Restrict);
+        });
+        modelBuilder.Entity<Organization>(entity =>
+        {
+            entity.Property(x => x.Document).HasMaxLength(32);
+            entity.Property(x => x.OperationalEmail).HasMaxLength(320);
         });
         modelBuilder.Entity<ChecklistTemplate>(entity => entity.Property(x => x.Name).HasMaxLength(200).IsRequired());
         modelBuilder.Entity<ChecklistTemplateRoom>(entity =>
@@ -153,6 +179,21 @@ public sealed class VistoraDbContext(
                 .IsUnique()
                 .HasFilter("\"Status\" IN ('Pending', 'Processing')");
             entity.HasIndex(x => new { x.OrganizationId, x.IdempotencyKey }).IsUnique();
+        });
+        modelBuilder.Entity<InspectionAcceptance>(entity =>
+        {
+            entity.Property(x => x.SignerName).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.SignerEmail).HasMaxLength(320).IsRequired();
+            entity.Property(x => x.SignatureObjectKey).HasMaxLength(1024).IsRequired();
+            entity.Property(x => x.SignatureSha256).HasMaxLength(64).IsFixedLength().IsRequired();
+            entity.Property(x => x.TermsVersion).HasMaxLength(32).IsRequired();
+            entity.HasIndex(x => new { x.OrganizationId, x.InspectionId }).IsUnique();
+            entity.HasOne(x => x.Inspection).WithOne(x => x.Acceptance)
+                .HasForeignKey<InspectionAcceptance>(x => x.InspectionId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<User>().WithMany()
+                .HasForeignKey(x => new { x.OrganizationId, x.ActorUserId })
+                .HasPrincipalKey(x => new { x.OrganizationId, x.Id })
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 

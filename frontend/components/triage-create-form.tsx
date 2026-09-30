@@ -25,6 +25,7 @@ export function TriageCreateForm() {
   const [unitId, setUnitId] = useState('');
   const [templateId, setTemplateId] = useState('');
   const [type, setType] = useState<'MoveIn' | 'MoveOut'>('MoveIn');
+  const [scheduledAtLocal, setScheduledAtLocal] = useState('');
   const [templateName, setTemplateName] = useState('');
   const [roomName, setRoomName] = useState('');
   const [itemDescription, setItemDescription] = useState('');
@@ -74,10 +75,11 @@ export function TriageCreateForm() {
         setTemplateId(selectedTemplateId);
       }
       if (!selectedTemplateId) throw new Error('Selecione ou crie um modelo de checklist.');
+      const scheduledAtUtc = scheduledAtLocal ? new Date(scheduledAtLocal).toISOString() : null;
       const created = await apiRequest<{ inspectionId: string }>('/api/v1/inspections/from-template', {
         method: 'POST',
         headers: { 'Idempotency-Key': crypto.randomUUID() },
-        body: JSON.stringify({ unitId, checklistTemplateId: selectedTemplateId, type }),
+        body: JSON.stringify({ unitId, checklistTemplateId: selectedTemplateId, type, scheduledAtUtc }),
       });
       await refresh();
       router.push(`/vistorias/${created.inspectionId}`);
@@ -97,6 +99,7 @@ export function TriageCreateForm() {
       <label className="form-field"><span>Unidade</span><select value={unitId} onChange={(event) => setUnitId(event.target.value)} required>{units.map((unit) => <option key={unit.id} value={unit.id}>{unit.identifier}</option>)}</select></label>
       <label className="form-field"><span>Tipo de vistoria</span><select value={type} onChange={(event) => setType(event.target.value as 'MoveIn' | 'MoveOut')}><option value="MoveIn">Entrada</option><option value="MoveOut">Saída</option></select></label>
       <label className="form-field"><span>Checklist base</span><select value={templateId} onChange={(event) => setTemplateId(event.target.value)} required>{templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}{canManageTemplates && <option value="new">Criar novo modelo</option>}</select></label>
+      <label className="form-field form-field--full"><span>Data e hora (opcional)</span><input type="datetime-local" value={scheduledAtLocal} onChange={(event) => setScheduledAtLocal(event.target.value)} /></label>
       {templateId === 'new' && <><label className="form-field"><span>Nome do checklist</span><input value={templateName} onChange={(event) => setTemplateName(event.target.value)} maxLength={200} required /></label><label className="form-field"><span>Primeiro ambiente</span><input value={roomName} onChange={(event) => setRoomName(event.target.value)} maxLength={200} required /></label><label className="form-field form-field--full"><span>Primeiro item</span><input value={itemDescription} onChange={(event) => setItemDescription(event.target.value)} maxLength={1000} required /></label></>}
     </div>
     {!properties.length && <p>Cadastre um imóvel e uma unidade na página <Link href="/imoveis">Imóveis</Link>.</p>}

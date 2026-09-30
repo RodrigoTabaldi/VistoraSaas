@@ -14,6 +14,8 @@ public sealed class Organization
 {
     public Guid Id { get; set; }
     public required string Name { get; set; }
+    public string? Document { get; set; }
+    public string? OperationalEmail { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
     public ICollection<User> Users { get; } = new List<User>();
 }
@@ -45,6 +47,22 @@ public sealed class Account
     public User? User { get; set; }
 }
 
+public sealed class AccountInvitation : IRowVersioned
+{
+    public Guid Id { get; set; }
+    public Guid OrganizationId { get; set; }
+    public Guid InvitedByUserId { get; set; }
+    public required string Email { get; set; }
+    public required string NormalizedEmail { get; set; }
+    public required string Role { get; set; }
+    public required string TokenHash { get; set; }
+    public DateTimeOffset CreatedAtUtc { get; set; }
+    public DateTimeOffset ExpiresAtUtc { get; set; }
+    public DateTimeOffset? AcceptedAtUtc { get; set; }
+    public DateTimeOffset? RevokedAtUtc { get; set; }
+    public uint RowVersion { get; set; }
+}
+
 public sealed class Property : IOrganizationScoped
 {
     public Guid Id { get; set; }
@@ -66,13 +84,14 @@ public sealed class Unit : IOrganizationScoped
     public ICollection<Inspection> Inspections { get; } = new List<Inspection>();
 }
 
-public sealed class ChecklistTemplate : IOrganizationScoped
+public sealed class ChecklistTemplate : IOrganizationScoped, IRowVersioned
 {
     public Guid Id { get; set; }
     public Guid OrganizationId { get; set; }
     public required string Name { get; set; }
     public bool IsActive { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
+    public uint RowVersion { get; set; }
     public ICollection<ChecklistTemplateRoom> Rooms { get; } = new List<ChecklistTemplateRoom>();
 }
 
@@ -86,6 +105,7 @@ public sealed class Inspection : IOrganizationScoped, IRowVersioned
     public Guid? RelatedInspectionId { get; set; }
     public InspectionStatus Status { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
+    public DateTimeOffset? ScheduledAtUtc { get; set; }
     public DateTimeOffset? CompletedAtUtc { get; set; }
     public uint RowVersion { get; set; }
     public Unit? Unit { get; set; }
@@ -93,6 +113,22 @@ public sealed class Inspection : IOrganizationScoped, IRowVersioned
     public Inspection? RelatedInspection { get; set; }
     public ICollection<InspectionRoom> Rooms { get; } = new List<InspectionRoom>();
     public ICollection<Report> Reports { get; } = new List<Report>();
+    public InspectionAcceptance? Acceptance { get; set; }
+}
+
+public sealed class InspectionAcceptance : IOrganizationScoped
+{
+    public Guid Id { get; set; }
+    public Guid OrganizationId { get; set; }
+    public Guid InspectionId { get; set; }
+    public Guid ActorUserId { get; set; }
+    public required string SignerName { get; set; }
+    public required string SignerEmail { get; set; }
+    public required string SignatureObjectKey { get; set; }
+    public required string SignatureSha256 { get; set; }
+    public required string TermsVersion { get; set; }
+    public DateTimeOffset AcceptedAtUtc { get; set; }
+    public Inspection? Inspection { get; set; }
 }
 
 public enum InspectionType

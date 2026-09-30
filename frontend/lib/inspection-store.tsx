@@ -10,9 +10,16 @@ type ApiInspection = {
   type: 'MoveIn' | 'MoveOut';
   status: 'Draft' | 'Completed' | 'Approved';
   createdAtUtc: string;
+  scheduledAtUtc: string | null;
 };
 type Property = { id: string; name: string; address: string };
 type Unit = { id: string; propertyId: string; identifier: string };
+
+function getPresentationStatus(status: ApiInspection['status'], scheduledAtUtc: string | null): InspectionRow['status'] {
+  if (status !== 'Draft') return 'Concluída';
+  if (!scheduledAtUtc) return 'Em andamento';
+  return Date.parse(scheduledAtUtc) < Date.now() ? 'Atrasada' : 'Agendada';
+}
 
 type InspectionStoreValue = {
   inspections: InspectionRow[];
@@ -55,7 +62,8 @@ export function InspectionProvider({ children, organizationId }: Readonly<{ chil
         responsibleTone: 'slate',
         date: created.toLocaleDateString('pt-BR'),
         time: created.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        status: completed ? 'Concluída' : 'Em andamento',
+        scheduledAtUtc: inspection.scheduledAtUtc,
+        status: getPresentationStatus(inspection.status, inspection.scheduledAtUtc),
         progress: completed ? 100 : 0,
       };
     }));

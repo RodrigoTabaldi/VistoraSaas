@@ -48,6 +48,8 @@ using Amazon.S3;
                       serviceProvider.GetRequiredService<TenantTransactionInterceptor>(),
                       serviceProvider.GetRequiredService<TenantCommandInterceptor>()));
 
+          services.AddHealthChecks().AddCheck("postgresql", new PostgreSqlHealthCheck(connectionString));
+
           services.AddScoped<IVistoraDbContext>(sp =>
               sp.GetRequiredService<VistoraDbContext>());
           services.AddHostedService<DatabaseRoleGuard>();

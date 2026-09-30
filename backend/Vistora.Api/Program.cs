@@ -25,6 +25,8 @@ builder.Services.AddScoped<IPasswordHasher<Account>, PasswordHasher<Account>>();
 builder.Services.AddScoped<AccountRegistrationService>();
 
 var authority = builder.Configuration["Authentication:Authority"];
+var audience = builder.Configuration["Authentication:Audience"];
+JwtConfigurationValidator.Validate(authority, audience);
 const string authenticationScheme = "VistoraAuth";
 builder.Services
     .AddAuthentication(options =>
@@ -75,7 +77,7 @@ if (!string.IsNullOrWhiteSpace(authority))
         .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
         {
             options.Authority = authority;
-            options.Audience = builder.Configuration["Authentication:Audience"];
+            options.Audience = audience;
             options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
         });
 }
@@ -143,6 +145,9 @@ app.MapHealthChecks("/health");
 app.MapInspectionsEndpoints();
 app.MapChecklistTemplatesEndpoints();
 app.MapAccountEndpoints();
+app.MapTeamEndpoints();
+app.MapOrganizationEndpoints();
+app.MapInspectionAcceptanceEndpoints();
 
 var messages = app.MapGroup("/api/v1/messages");
 messages.RequireAuthorization(AccessPolicies.ManageOrganization);

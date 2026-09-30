@@ -10,8 +10,12 @@ public sealed class CreateInspectionFromTemplateUseCase(IVistoraDbContext dbCont
         Guid unitId,
         Guid checklistTemplateId,
         InspectionType type,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        DateTimeOffset? scheduledAtUtc = null)
     {
+        if (!InspectionScheduleRules.IsValid(scheduledAtUtc, DateTimeOffset.UtcNow))
+            throw new ArgumentException("Scheduled time must be in the future.", nameof(scheduledAtUtc));
+
         var template = await dbContext.ChecklistTemplates
             .Include(t => t.Rooms)
             .ThenInclude(r => r.Items)
@@ -48,7 +52,8 @@ public sealed class CreateInspectionFromTemplateUseCase(IVistoraDbContext dbCont
             RelatedInspectionId = relatedInspectionId,
             Type = type,
             Status = InspectionStatus.Draft,
-            CreatedAtUtc = now
+            CreatedAtUtc = now,
+            ScheduledAtUtc = InspectionScheduleRules.Normalize(scheduledAtUtc)
         };
 
         dbContext.Inspections.Add(inspection);

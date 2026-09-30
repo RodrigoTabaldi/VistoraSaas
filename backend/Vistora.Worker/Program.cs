@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Vistora.Application;
 using Vistora.Infrastructure;
@@ -5,7 +6,7 @@ using Vistora.Infrastructure.Messaging;
 using Vistora.Infrastructure.Reporting;
 using Vistora.Worker;
 
-var builder = Host.CreateApplicationBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
     .AddVistoraApplication()
@@ -17,5 +18,6 @@ builder.Services.AddHostedService<ReportJobConsumer>();
 builder.Services.AddHostedService<ReportJobRetryScanner>();
 builder.Services.AddHostedService<MessageConsumerWorker>();
 
-var host = builder.Build();
-await host.RunAsync();
+var app = builder.Build();
+app.MapHealthChecks("/health");
+await app.RunAsync();

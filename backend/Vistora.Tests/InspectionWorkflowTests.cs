@@ -24,4 +24,14 @@ public sealed class InspectionWorkflowTests
     {
         Assert.Equal(expected, InspectionWorkflow.CanApprove(status, hasReport));
     }
+
+    [Theory]
+    [InlineData(InspectionStatus.Completed, true, false, false)]
+    [InlineData(InspectionStatus.Completed, true, true, true)]
+    [InlineData(InspectionStatus.Completed, false, true, false)]
+    [InlineData(InspectionStatus.Draft, true, true, false)]
+    public void ApprovalRequiresAnAcceptance(InspectionStatus status, bool hasReport, bool hasAcceptance, bool expected)
+    {
+        Assert.Equal(expected, InspectionWorkflow.CanApprove(status, hasReport, hasAcceptance));
+    }
 }

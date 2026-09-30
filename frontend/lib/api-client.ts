@@ -46,3 +46,14 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   if (response.status === 204) return undefined as T;
   return await response.json() as T;
 }
+
+export async function apiBlob(path: string): Promise<Blob> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}${path}`, { credentials: 'include' });
+  } catch {
+    throw new Error('Não foi possível conectar à API. Confira se o Docker está em execução.');
+  }
+  if (!response.ok) throw new Error('Não foi possível carregar o arquivo privado.');
+  return response.blob();
+}

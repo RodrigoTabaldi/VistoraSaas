@@ -128,7 +128,7 @@ public static class AccountEndpoints
         return errors;
     }
 
-    private static async Task SignInAsync(HttpContext httpContext, Account account, bool rememberMe)
+    internal static async Task SignInAsync(HttpContext httpContext, Account account, bool rememberMe)
     {
         var claims = new[]
         {

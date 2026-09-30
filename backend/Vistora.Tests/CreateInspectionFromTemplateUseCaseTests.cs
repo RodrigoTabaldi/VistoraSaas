@@ -35,7 +35,7 @@ public sealed class CreateInspectionFromTemplateUseCaseTests
         await db.SaveChangesAsync();
 
         var result = await new CreateInspectionFromTemplateUseCase(db, new TestTenantContext(organizationId))
-            .ExecuteAsync(unit.Id, template.Id, InspectionType.MoveIn);
+            .ExecuteAsync(unit.Id, template.Id, InspectionType.MoveIn, scheduledAtUtc: DateTimeOffset.Now.AddDays(1).ToOffset(TimeSpan.FromHours(-3)));
 
         var created = Assert.IsType<CreateInspectionResult.Created>(result);
         var inspection = await db.Inspections.Include(x => x.Rooms).ThenInclude(x => x.Items)
@@ -45,6 +45,10 @@ public sealed class CreateInspectionFromTemplateUseCaseTests
         var copiedRoom = Assert.Single(inspection.Rooms);
         Assert.Equal("Sala", copiedRoom.Name);
         Assert.Equal("Paredes", Assert.Single(copiedRoom.Items).Description);
+        template.Rooms.Single().Name = "Sala alterada";
+        await db.SaveChangesAsync();
+        Assert.Equal("Sala", (await db.InspectionRooms.SingleAsync()).Name);
+        Assert.True(inspection.ScheduledAtUtc > DateTimeOffset.UtcNow);
     }
 
     [Fact]

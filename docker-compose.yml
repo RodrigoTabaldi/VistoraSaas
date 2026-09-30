@@ -9,7 +9,7 @@ services:
       - "3000:8080"
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
 
   api:
     build:
@@ -32,6 +32,12 @@ services:
       Authentication__Audience: ${VISTORA_AUTH_AUDIENCE:-}
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     volumes:
       - api-auth-keys:/root/.aspnet/DataProtection-Keys
     depends_on:
@@ -63,7 +69,7 @@ services:
       Storage__S3__AllowInsecureLocalEndpoint: ${VISTORA_S3_ALLOW_INSECURE_LOCAL:-true}
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -72,6 +78,14 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+    expose:
+      - "8081"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:8081/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z

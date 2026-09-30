@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Vistora.Application.Messaging;
 using Vistora.Application.Persistence;
 using Vistora.Application.Storage;
+using Vistora.Application.UseCases;
 using Vistora.Domain;
 using Vistora.Infrastructure.Persistence.PostgreSql;
 
@@ -39,6 +40,7 @@ public static class ApiEndpoints
         inspections.MapGet("/{inspectionId:guid}", GetInspectionAsync);
         inspections.MapGet("/{inspectionId:guid}/comparison", CompareInspectionAsync);
         inspections.MapPatch("/{inspectionId:guid}/status", UpdateInspectionStatusAsync).RequireAuthorization(AccessPolicies.ManageOrganization);
+        inspections.MapPatch("/{inspectionId:guid}/schedule", UpdateInspectionScheduleAsync).RequireAuthorization(AccessPolicies.EditInspection);
         inspections.MapPost("/{inspectionId:guid}/rooms", CreateRoomAsync).RequireAuthorization(AccessPolicies.EditInspection);
         inspections.MapPost("/{inspectionId:guid}/reports", UploadReportAsync).RequireAuthorization(AccessPolicies.ManageOrganization);
         inspections.MapGet("/{inspectionId:guid}/reports", ListReportsAsync);
@@ -109,7 +111,7 @@ public static class ApiEndpoints
     private static async Task<IResult> ListInspectionsAsync(VistoraDbContext db, CancellationToken cancellationToken)
     {
         var inspections = await db.Inspections.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc)
-            .Select(x => new InspectionResponse(x.Id, x.UnitId, x.Type, x.Status, x.CreatedAtUtc, x.CompletedAtUtc, x.RowVersion))
+            .Select(x => new InspectionResponse(x.Id, x.UnitId, x.Type, x.Status, x.CreatedAtUtc, x.ScheduledAtUtc, x.CompletedAtUtc, x.RowVersion))
             .ToListAsync(cancellationToken);
         return Results.Ok(inspections);
     }
@@ -119,6 +121,7 @@ public static class ApiEndpoints
     {
         if (!HasTenant(tenant, out var organizationId)) return TenantRequired();
         if (!Enum.IsDefined(request.Type)) return Validation("type must be MoveIn or MoveOut");
+        if (!InspectionScheduleRules.IsValid(request.ScheduledAtUtc, DateTimeOffset.UtcNow)) return Validation("scheduledAtUtc must be in the future or null");
         if (!await db.Units.AnyAsync(x => x.Id == request.UnitId, cancellationToken)) return Results.NotFound();
         if (request.ChecklistTemplateId.HasValue && !await db.ChecklistTemplates.AnyAsync(x => x.Id == request.ChecklistTemplateId, cancellationToken)) return Results.NotFound();
 
@@ -134,26 +137,33 @@ public static class ApiEndpoints
         {
             Id = Guid.NewGuid(), UnitId = request.UnitId, ChecklistTemplateId = request.ChecklistTemplateId,
             RelatedInspectionId = relatedInspectionId,
-            Type = request.Type, Status = InspectionStatus.Draft, OrganizationId = organizationId, CreatedAtUtc = DateTimeOffset.UtcNow
+            Type = request.Type, Status = InspectionStatus.Draft, OrganizationId = organizationId, CreatedAtUtc = DateTimeOffset.UtcNow,
+            ScheduledAtUtc = InspectionScheduleRules.Normalize(request.ScheduledAtUtc)
         };
         db.Inspections.Add(inspection);
         await db.SaveChangesAsync(cancellationToken);
         await PublishAsync(bus, "inspection.created", inspection.Id, organizationId, cancellationToken);
         return Results.Created($"/api/v1/inspections/{inspection.Id}",
-            new InspectionResponse(inspection.Id, inspection.UnitId, inspection.Type, inspection.Status, inspection.CreatedAtUtc, null, inspection.RowVersion));
+            new InspectionResponse(inspection.Id, inspection.UnitId, inspection.Type, inspection.Status, inspection.CreatedAtUtc, inspection.ScheduledAtUtc, null, inspection.RowVersion));
     }
 
     private static async Task<IResult> GetInspectionAsync(Guid inspectionId, VistoraDbContext db, CancellationToken cancellationToken)
     {
-        var inspection = await db.Inspections.AsNoTracking().Include(x => x.Rooms).ThenInclude(x => x.Items).ThenInclude(x => x.Evidence)
+        var inspection = await db.Inspections.AsNoTracking().Include(x => x.Acceptance)
+            .Include(x => x.Rooms).ThenInclude(x => x.Items).ThenInclude(x => x.Evidence)
             .SingleOrDefaultAsync(x => x.Id == inspectionId, cancellationToken);
         if (inspection is null) return Results.NotFound();
 
         return Results.Ok(new
         {
-            inspection.Id, inspection.UnitId, inspection.Type, inspection.Status, inspection.CreatedAtUtc, inspection.CompletedAtUtc,
+            inspection.Id, inspection.UnitId, inspection.Type, inspection.Status, inspection.CreatedAtUtc, inspection.ScheduledAtUtc, inspection.CompletedAtUtc,
             inspection.RelatedInspectionId,
             inspection.RowVersion,
+            Acceptance = inspection.Acceptance == null ? null : new
+            {
+                inspection.Acceptance.Id, inspection.Acceptance.SignerName, inspection.Acceptance.SignerEmail,
+                inspection.Acceptance.AcceptedAtUtc, inspection.Acceptance.TermsVersion
+            },
             Rooms = inspection.Rooms.OrderBy(x => x.Position).Select(room => new
             {
                 room.Id, room.Name, room.Position, room.RowVersion,
@@ -182,8 +192,11 @@ public static class ApiEndpoints
         if (inspection is null) return Results.NotFound();
         var report = await db.Reports.Where(x => x.InspectionId == inspectionId)
             .OrderByDescending(x => x.Version).FirstOrDefaultAsync(cancellationToken);
+        var hasAcceptance = await db.InspectionAcceptances.AnyAsync(x => x.InspectionId == inspectionId, cancellationToken);
         if (!InspectionWorkflow.CanApprove(inspection.Status, report is not null))
             return Results.Conflict(new { error = "inspection must be completed and have a report before approval" });
+        if (!InspectionWorkflow.CanApprove(inspection.Status, report is not null, hasAcceptance))
+            return Results.Conflict(new { error = "inspection acceptance is required before approval", code = "acceptance_required" });
 
         db.Entry(inspection).Property(x => x.RowVersion).OriginalValue = request.RowVersion;
         inspection.Status = InspectionStatus.Approved;
@@ -290,6 +303,41 @@ public static class ApiEndpoints
     {
         var evidence = await db.Evidence.AsNoTracking().SingleOrDefaultAsync(x => x.Id == evidenceId, cancellationToken);
         return evidence is null ? Results.NotFound() : Results.Ok(new { Url = $"/api/v1/evidence/{evidence.Id}/content", evidence.FileName, evidence.ContentType });
+    }
+
+    private static async Task<IResult> UpdateInspectionScheduleAsync(
+        Guid inspectionId, ScheduleRequest request, VistoraDbContext db, ITenantContext tenant,
+        HttpContext httpContext, CancellationToken cancellationToken)
+    {
+        if (!HasTenant(tenant, out var organizationId)) return TenantRequired();
+        if (!InspectionScheduleRules.IsValid(request.ScheduledAtUtc, DateTimeOffset.UtcNow))
+            return Validation("scheduledAtUtc must be in the future or null");
+
+        var inspection = await db.Inspections.SingleOrDefaultAsync(x => x.Id == inspectionId, cancellationToken);
+        if (inspection is null) return Results.NotFound();
+        if (inspection.Status != InspectionStatus.Draft)
+            return Results.Conflict(new { error = "only draft inspections can be scheduled" });
+
+        inspection.ScheduledAtUtc = InspectionScheduleRules.Normalize(request.ScheduledAtUtc);
+        var occurredAt = DateTimeOffset.UtcNow;
+        var actorId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        db.AuditEvents.Add(new AuditEvent
+        {
+            Id = Guid.NewGuid(), OrganizationId = organizationId,
+            ActorUserId = Guid.TryParse(actorId, out var parsedActorId) ? parsedActorId : null,
+            EventType = request.ScheduledAtUtc.HasValue ? "InspectionScheduled" : "InspectionScheduleCleared",
+            EntityType = "Inspection", EntityId = inspection.Id.ToString(), OccurredAtUtc = occurredAt
+        });
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return Results.Ok(new { inspection.Id, inspection.ScheduledAtUtc, inspection.RowVersion });
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new { error = "inspection was modified by another request", code = "concurrency_conflict" });
+        }
     }
 
     private static async Task<IResult> CompareInspectionAsync(Guid inspectionId, VistoraDbContext db, CancellationToken cancellationToken)
@@ -404,12 +452,13 @@ public static class ApiEndpoints
 
     public sealed record PropertyRequest(string Name, string Address);
     public sealed record UnitRequest(string Identifier);
-    public sealed record InspectionRequest(Guid UnitId, InspectionType Type, Guid? ChecklistTemplateId);
+    public sealed record InspectionRequest(Guid UnitId, InspectionType Type, Guid? ChecklistTemplateId, DateTimeOffset? ScheduledAtUtc = null);
     public sealed record RoomRequest(string Name, int Position);
     public sealed record ItemRequest(string Description, int Position);
     public sealed record UpdateItemRequest(string? Response, string? Notes, uint RowVersion);
     public sealed record StatusRequest(InspectionStatus Status, uint RowVersion);
+    public sealed record ScheduleRequest(DateTimeOffset? ScheduledAtUtc);
     private sealed record PropertyResponse(Guid Id, string Name, string Address, DateTimeOffset CreatedAtUtc);
     private sealed record UnitResponse(Guid Id, Guid PropertyId, string Identifier);
-    private sealed record InspectionResponse(Guid Id, Guid UnitId, InspectionType Type, InspectionStatus Status, DateTimeOffset CreatedAtUtc, DateTimeOffset? CompletedAtUtc, uint RowVersion);
+    private sealed record InspectionResponse(Guid Id, Guid UnitId, InspectionType Type, InspectionStatus Status, DateTimeOffset CreatedAtUtc, DateTimeOffset? ScheduledAtUtc, DateTimeOffset? CompletedAtUtc, uint RowVersion);
 }

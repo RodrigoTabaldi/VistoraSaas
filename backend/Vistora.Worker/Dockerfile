@@ -6,6 +6,8 @@ RUN dotnet publish backend/Vistora.Worker/Vistora.Worker.csproj --no-restore -c 
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends curl fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/publish .
+ENV ASPNETCORE_URLS=http://+:8081
+EXPOSE 8081
 ENTRYPOINT ["dotnet", "Vistora.Worker.dll"]

@@ -10,16 +10,14 @@ public sealed class CreateChecklistTemplateUseCase(IVistoraDbContext dbContext, 
 {
     public async Task<Guid> ExecuteAsync(string name, IReadOnlyList<CreateChecklistTemplateRoomInput> rooms, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            throw new ArgumentException("Template name cannot be empty.", nameof(name));
-        }
+        if (!ChecklistTemplateRules.TryValidate(name, rooms, out var error))
+            throw new ArgumentException(error, nameof(name));
 
         var template = new ChecklistTemplate
         {
             Id = Guid.NewGuid(),
             OrganizationId = tenantContext.OrganizationId ?? Guid.Empty,
-            Name = name,
+            Name = name.Trim(),
             IsActive = true,
             CreatedAtUtc = DateTimeOffset.UtcNow
         };
@@ -33,7 +31,7 @@ public sealed class CreateChecklistTemplateUseCase(IVistoraDbContext dbContext, 
                     Id = Guid.NewGuid(),
                     OrganizationId = template.OrganizationId,
                     ChecklistTemplateId = template.Id,
-                    Name = roomInput.Name,
+                    Name = roomInput.Name.Trim(),
                     Position = roomInput.Position,
                     Template = template
                 };
@@ -47,7 +45,7 @@ public sealed class CreateChecklistTemplateUseCase(IVistoraDbContext dbContext, 
                             Id = Guid.NewGuid(),
                             OrganizationId = template.OrganizationId,
                             ChecklistTemplateRoomId = room.Id,
-                            Description = itemInput.Description,
+                            Description = itemInput.Description.Trim(),
                             Position = itemInput.Position,
                             Room = room
                         };

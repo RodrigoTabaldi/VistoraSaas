@@ -32,16 +32,22 @@ O cadastro cria a organização, o usuário administrador e as credenciais em tr
 
 ## Fluxo implementado
 
-O usuário cadastra imóveis e unidades, cria um modelo simples de checklist, abre uma vistoria de entrada ou saída, registra cômodos, itens, respostas e fotos, e conclui a vistoria. Uma saída é vinculada à entrada aprovada mais recente da mesma unidade, quando existe, e a interface compara respostas e observações. O Worker gera um PDF com dados do imóvel, respostas, observações e evidências JPEG/PNG. Evidências WebP são referenciadas no PDF e continuam acessíveis pela aplicação. O download de fotos e laudos passa por rota autenticada que confere o SHA-256. A aprovação exige perfil administrador e um relatório existente. Após a conclusão, os dados da vistoria não podem ser alterados pelos endpoints de edição.
+O usuário cadastra imóveis e unidades, cria e edita modelos completos de checklist e abre vistorias de entrada ou saída. A vistoria copia ambientes e itens do modelo, registra respostas, observações e fotos, e pode receber data e hora em UTC. Uma saída é vinculada à entrada aprovada mais recente da mesma unidade, quando existe, e a interface compara respostas e observações. O Worker gera um PDF com dados do imóvel, respostas, observações e evidências JPEG/PNG. Evidências WebP são referenciadas no PDF e continuam acessíveis pela aplicação. O download de fotos, laudos e assinaturas passa por rotas autenticadas que conferem o SHA-256.
 
-As rotas de escrita usam perfis: `Admin` gerencia imóveis, unidades, modelos, relatórios e aprovação; `Admin` e `Vistoriador` podem criar e editar vistorias em rascunho; `Leitor` tem acesso de leitura. A criação e gestão de contas para os perfis `Vistoriador` e `Leitor` ainda não têm interface ou convite. O primeiro usuário cadastrado recebe `Admin`.
+Administradores podem persistir os dados da organização, gerenciar membros e criar convites de uso único válidos por sete dias. A API guarda apenas o hash do token; como não há provedor de e-mail configurado, a interface oferece o link para cópia e envio manual. A vistoria concluída com relatório pode receber aceite eletrônico com imagem desenhada, usuário, data, versão dos termos e trilha de auditoria. A aprovação exige perfil administrador, relatório e aceite. Esse registro não é uma assinatura digital certificada. Após a conclusão, os dados do checklist não podem ser alterados pelos endpoints de edição.
+
+As rotas de escrita usam perfis: `Admin` gerencia imóveis, unidades, modelos, convites, organização, relatórios e aprovação; `Admin` e `Vistoriador` podem criar e editar vistorias em rascunho e registrar aceite; `Leitor` tem acesso de leitura. O primeiro usuário cadastrado recebe `Admin`.
+
+## Saúde e filas
+
+`/health` verifica PostgreSQL, Redis e RabbitMQ na API. O Worker expõe o mesmo caminho na porta interna `8081`; o Compose usa os dois endpoints para marcar os serviços como saudáveis antes de iniciar seus dependentes. Mensagens inválidas vão para `<fila>.failed`; falhas transitórias recebem até cinco novas tentativas, com intervalo de 30 segundos, pela fila `<fila>.retry`. A inspeção e o reprocessamento operacional das mensagens falhas ainda precisam de procedimento.
 
 ## Limites atuais
 
-- Equipe e configurações ainda exibem rascunhos locais; não são dados compartilhados.
-- Agenda mostra datas de criação, pois não há agendamento.
-- Não há aceite ou assinatura nem editor completo de modelos. A comparação usa nome de ambiente e item; casos com nomes alterados aparecem como itens ausentes.
-- O PDF não incorpora imagens WebP. O relatório ainda não possui assinatura digital.
+- Convites ainda precisam ser enviados manualmente; entrega de e-mail e recuperação de senha não estão configuradas.
+- O aceite é um registro eletrônico auditável; não usa certificado digital ou provedor de assinatura.
+- A comparação de vistorias usa o nome de ambiente e item; alterações nesses nomes podem aparecer como itens ausentes.
+- O PDF não incorpora imagens WebP. A inspeção e o reprocessamento operacional das mensagens na fila de falha ainda precisam de procedimento.
 - Recuperação de desastre, metas de disponibilidade e desempenho e implantação de produção não foram validadas. A implantação depende de um destino e credenciais de infraestrutura.
 
 Esses itens precisam de regras de produto, implementação e verificação antes de considerar o SaaS completo.

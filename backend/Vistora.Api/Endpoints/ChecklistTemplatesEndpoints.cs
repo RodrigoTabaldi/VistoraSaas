@@ -24,9 +24,17 @@ public static class ChecklistTemplatesEndpoints
             .RequireAuthorization()
             .WithTags("ChecklistTemplates");
 
+        endpoints.MapGet("/api/v1/checklist-templates/manage", ListTemplatesForManagement)
+            .RequireAuthorization(AccessPolicies.ManageOrganization)
+            .WithTags("ChecklistTemplates");
+
         endpoints.MapPost("/api/v1/checklist-templates", CreateChecklistTemplate)
             .RequireAuthorization(AccessPolicies.ManageOrganization)
             .WithName("CreateChecklistTemplate")
+            .WithTags("ChecklistTemplates");
+
+        endpoints.MapPut("/api/v1/checklist-templates/{templateId:guid}", UpdateChecklistTemplate)
+            .RequireAuthorization(AccessPolicies.ManageOrganization)
             .WithTags("ChecklistTemplates");
 
         endpoints.MapPost("/api/v1/inspections/from-template", CreateInspection)
@@ -67,6 +75,8 @@ public static class ChecklistTemplatesEndpoints
                 r.Items?.Select(i => new CreateChecklistTemplateItemInput(i.Description, i.Position)).ToList()
                     ?? (IReadOnlyList<CreateChecklistTemplateItemInput>)Array.Empty<CreateChecklistTemplateItemInput>()))
             .ToList() ?? new List<CreateChecklistTemplateRoomInput>();
+        if (!ChecklistTemplateRules.TryValidate(request.Name, roomsInput, out var validationError))
+            return Results.BadRequest(new { error = validationError });
 
         var outcome = await idempotencyGuard.ExecuteAsync(
             organizationId,
@@ -81,6 +91,78 @@ public static class ChecklistTemplatesEndpoints
 
         var id = outcome.Result;
         return Results.Created($"/api/v1/checklist-templates/{id}", new { checklistTemplateId = id });
+    }
+
+    private static async Task<IResult> ListTemplatesForManagement(VistoraDbContext db, CancellationToken cancellationToken)
+    {
+        var templates = await db.ChecklistTemplates.AsNoTracking()
+            .Include(template => template.Rooms).ThenInclude(room => room.Items)
+            .OrderBy(template => template.Name)
+            .Select(template => new
+            {
+                template.Id, template.Name, template.IsActive, template.RowVersion,
+                Rooms = template.Rooms.OrderBy(room => room.Position).Select(room => new
+                {
+                    room.Name, room.Position,
+                    Items = room.Items.OrderBy(item => item.Position).Select(item => new { item.Description, item.Position })
+                })
+            })
+            .ToListAsync(cancellationToken);
+        return Results.Ok(templates);
+    }
+
+    private static async Task<IResult> UpdateChecklistTemplate(
+        Guid templateId, UpdateChecklistTemplateRequest request, VistoraDbContext db, CancellationToken cancellationToken)
+    {
+        if (request is null || request.RowVersion == 0)
+            return Results.BadRequest(new { error = "A valid rowVersion is required." });
+
+        var rooms = request.Rooms?.Select(room => new CreateChecklistTemplateRoomInput(
+            room.Name, room.Position,
+            room.Items?.Select(item => new CreateChecklistTemplateItemInput(item.Description, item.Position)).ToList()
+                ?? (IReadOnlyList<CreateChecklistTemplateItemInput>)Array.Empty<CreateChecklistTemplateItemInput>())).ToList();
+        if (!ChecklistTemplateRules.TryValidate(request.Name, rooms, out var validationError))
+            return Results.BadRequest(new { error = validationError });
+
+        var template = await db.ChecklistTemplates.Include(x => x.Rooms).ThenInclude(x => x.Items)
+            .SingleOrDefaultAsync(x => x.Id == templateId, cancellationToken);
+        if (template is null) return Results.NotFound();
+
+        db.Entry(template).Property(x => x.RowVersion).OriginalValue = request.RowVersion;
+        template.Name = request.Name.Trim();
+        template.IsActive = request.IsActive;
+        db.Entry(template).Property(x => x.Name).IsModified = true;
+
+        try
+        {
+            // Template edits replace only the reusable definition; inspections retain copied rooms and items.
+            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+            db.ChecklistTemplateRooms.RemoveRange(template.Rooms);
+            template.Rooms.Clear();
+            await db.SaveChangesAsync(cancellationToken);
+            foreach (var roomInput in rooms!)
+            {
+                var room = new ChecklistTemplateRoom
+                {
+                    Id = Guid.NewGuid(), OrganizationId = template.OrganizationId,
+                    ChecklistTemplateId = template.Id, Name = roomInput.Name.Trim(), Position = roomInput.Position
+                };
+                foreach (var itemInput in roomInput.Items)
+                    room.Items.Add(new ChecklistTemplateItem
+                    {
+                        Id = Guid.NewGuid(), OrganizationId = template.OrganizationId,
+                        ChecklistTemplateRoomId = room.Id, Description = itemInput.Description.Trim(), Position = itemInput.Position
+                    });
+                template.Rooms.Add(room);
+            }
+            await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return Results.Ok(new { template.Id, template.Name, template.IsActive, template.RowVersion });
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new { error = "template was modified by another request", code = "concurrency_conflict" });
+        }
     }
 
     private static async Task<IResult> CreateInspection(
@@ -105,6 +187,8 @@ public static class ChecklistTemplatesEndpoints
         {
             return Results.BadRequest(new { error = $"Invalid inspection type '{request.Type}'. Allowed values: MoveIn, MoveOut." });
         }
+        if (!InspectionScheduleRules.IsValid(request.ScheduledAtUtc, DateTimeOffset.UtcNow))
+            return Results.BadRequest(new { error = "ScheduledAtUtc must be in the future or null." });
 
         if (tenantContext.OrganizationId is not { } organizationId)
         {
@@ -114,7 +198,7 @@ public static class ChecklistTemplatesEndpoints
         var outcome = await idempotencyGuard.ExecuteAsync(
             organizationId,
             idempotencyKey,
-            async () => await useCase.ExecuteAsync(request.UnitId, request.ChecklistTemplateId, inspectionType, cancellationToken),
+            async () => await useCase.ExecuteAsync(request.UnitId, request.ChecklistTemplateId, inspectionType, cancellationToken, request.ScheduledAtUtc),
             cancellationToken);
 
         if (outcome.Kind == IdempotencyResultKind.Conflict)
@@ -151,7 +235,14 @@ public sealed record CreateChecklistTemplateItemRequest(
     string Description,
     int Position);
 
+public sealed record UpdateChecklistTemplateRequest(
+    string Name,
+    bool IsActive,
+    uint RowVersion,
+    List<CreateChecklistTemplateRoomRequest>? Rooms);
+
 public sealed record CreateInspectionRequest(
     Guid UnitId,
     Guid ChecklistTemplateId,
-    string Type);
+    string Type,
+    DateTimeOffset? ScheduledAtUtc = null);

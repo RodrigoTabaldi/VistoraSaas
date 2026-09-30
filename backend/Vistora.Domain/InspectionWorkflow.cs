@@ -6,4 +6,7 @@ public static class InspectionWorkflow
 
     public static bool CanApprove(InspectionStatus status, bool hasReport) =>
         status == InspectionStatus.Completed && hasReport;
+
+    public static bool CanApprove(InspectionStatus status, bool hasReport, bool hasAcceptance) =>
+        CanApprove(status, hasReport) && hasAcceptance;
 }

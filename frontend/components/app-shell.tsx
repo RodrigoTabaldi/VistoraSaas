@@ -7,7 +7,6 @@ import { Icon, type IconName } from './icons';
 import { apiRequest } from '../lib/api-client';
 import { AuthProvider, type CurrentUser } from '../lib/auth-context';
 import { InspectionProvider } from '../lib/inspection-store';
-import { WorkspaceProvider } from '../lib/workspace-store';
 
 const navigation: Array<{ href: string; label: string; icon: IconName }> = [
   { href: '/dashboard', label: 'Home', icon: 'home' },
@@ -17,6 +16,7 @@ const navigation: Array<{ href: string; label: string; icon: IconName }> = [
   { href: '/relatorios', label: 'Relatórios', icon: 'chart' },
   { href: '/analises', label: 'Dashboard', icon: 'dashboard' },
   { href: '/equipe', label: 'Equipe', icon: 'users' },
+  { href: '/modelos-checklist', label: 'Modelos', icon: 'clipboard' },
   { href: '/configuracoes', label: 'Configurações', icon: 'settings' },
 ];
 
@@ -91,7 +91,7 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
           </div>
         </div>
         <nav className="sidebar-nav" aria-label="Navegação principal">
-          {navigation.map((item) => {
+          {navigation.filter((item) => !['/equipe', '/modelos-checklist'].includes(item.href) || currentUser.role === 'Admin').map((item) => {
             const isActive = item.href === '/dashboard' ? pathname === item.href : pathname.startsWith(item.href);
             return (
               <Link key={item.href} className="sidebar-nav-link" href={item.href} aria-current={isActive ? 'page' : undefined} onClick={() => setSidebarOpen(false)}>
@@ -127,7 +127,7 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
             {currentUser.role !== 'Leitor' && <Link className="button button--primary topbar-cta" href="/triagens/nova"><Icon name="plus" size={18} /> Nova triagem</Link>}
           </div>
         </header>
-        <main className="app-content"><AuthProvider user={currentUser}><WorkspaceProvider key={currentUser.organizationId} organizationId={currentUser.organizationId}><InspectionProvider organizationId={currentUser.organizationId}>{children}</InspectionProvider></WorkspaceProvider></AuthProvider></main>
+        <main className="app-content"><AuthProvider user={currentUser}><InspectionProvider organizationId={currentUser.organizationId}>{children}</InspectionProvider></AuthProvider></main>
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ export type InspectionRow = {
   responsibleTone: string;
   date: string;
   time: string;
+  scheduledAtUtc?: string | null;
   status: InspectionStatus;
   progress: number;
 };

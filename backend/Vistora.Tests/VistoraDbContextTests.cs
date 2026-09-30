@@ -85,6 +85,24 @@ public sealed class VistoraDbContextTests
                 .SequenceEqual(new[] { nameof(Report.OrganizationId), nameof(Report.InspectionId), nameof(Report.Version) }));
     }
 
+    [Fact]
+    public void Model_keeps_invitation_lookup_global_and_acceptance_tenant_scoped()
+    {
+        using var context = CreatePostgreSqlContext(Guid.NewGuid());
+
+        var invitation = context.Model.FindEntityType(typeof(AccountInvitation))!;
+        var acceptance = context.Model.FindEntityType(typeof(InspectionAcceptance))!;
+
+        Assert.Equal("account_invitations", invitation.GetTableName());
+        Assert.Null(invitation.FindAnnotation("QueryFilter"));
+        Assert.True(invitation.FindProperty(nameof(AccountInvitation.RowVersion))!.IsConcurrencyToken);
+        Assert.Equal("inspection_acceptances", acceptance.GetTableName());
+        Assert.NotNull(acceptance.FindAnnotation("QueryFilter"));
+        Assert.Contains(acceptance.GetIndexes(), index => index.IsUnique &&
+            index.Properties.Select(property => property.Name)
+                .SequenceEqual(new[] { nameof(InspectionAcceptance.OrganizationId), nameof(InspectionAcceptance.InspectionId) }));
+    }
+
     private static VistoraDbContext CreateContext(string databaseName, Guid? organizationId)
     {
         var tenantContext = new TestTenantContext(organizationId);

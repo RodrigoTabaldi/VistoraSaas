@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState, type ChangeEvent } from 'react';
 import { Icon } from './icons';
 import { PageHeading, StatusBadge } from './dashboard-primitives';
-import { apiRequest } from '../lib/api-client';
+import { SignatureCapture } from './signature-capture';
+import { apiBlob, apiRequest } from '../lib/api-client';
 import { useCurrentUser } from '../lib/auth-context';
 import { useInspections } from '../lib/inspection-store';
 
@@ -16,9 +17,11 @@ type InspectionItem = {
 type InspectionRoom = { id: string; name: string; position: number; items: InspectionItem[] };
 type Inspection = {
   id: string; unitId: string; type: 'MoveIn' | 'MoveOut'; status: 'Draft' | 'Completed' | 'Approved';
-  rowVersion: number; createdAtUtc: string; rooms: InspectionRoom[];
+  rowVersion: number; createdAtUtc: string; scheduledAtUtc: string | null; rooms: InspectionRoom[];
+  acceptance: Acceptance | null;
 };
 type Report = { id: string; version: number; createdAtUtc: string; approvedAtUtc: string | null };
+type Acceptance = { id: string; signerName: string; signerEmail: string; acceptedAtUtc: string; termsVersion: string };
 type Download = { url: string };
 type Comparison = {
   moveInInspectionId: string;
@@ -30,6 +33,12 @@ type Comparison = {
 
 const responseOptions = ['Não verificado', 'Conforme', 'Atenção', 'Não conforme'];
 
+function toLocalDateTime(value: string | null) {
+  if (!value) return '';
+  const date = new Date(value);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
+
 export function InspectionDetail({ inspectionId }: Readonly<{ inspectionId: string }>) {
   const role = useCurrentUser().role;
   const { getInspection, completeInspection, refresh: refreshInspections, error: storeError } = useInspections();
@@ -39,6 +48,8 @@ export function InspectionDetail({ inspectionId }: Readonly<{ inspectionId: stri
   const [comparison, setComparison] = useState<Comparison | null>(null);
   const [comparisonError, setComparisonError] = useState('');
   const [roomName, setRoomName] = useState('');
+  const [scheduledAtLocal, setScheduledAtLocal] = useState('');
+  const [signaturePreviewUrl, setSignaturePreviewUrl] = useState('');
   const [itemNames, setItemNames] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -49,7 +60,9 @@ export function InspectionDetail({ inspectionId }: Readonly<{ inspectionId: stri
       apiRequest<Inspection>(`/api/v1/inspections/${inspectionId}`),
       apiRequest<Report[]>(`/api/v1/inspections/${inspectionId}/reports`),
     ]);
+    setSignaturePreviewUrl('');
     setInspection(detail);
+    setScheduledAtLocal(toLocalDateTime(detail.scheduledAtUtc));
     setReports(reportList);
     if (detail.type === 'MoveOut') {
       try {
@@ -70,6 +83,10 @@ export function InspectionDetail({ inspectionId }: Readonly<{ inspectionId: stri
     refresh().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : 'Não foi possível carregar a vistoria.'))
       .finally(() => setLoading(false));
   }, [refresh]);
+
+  useEffect(() => () => {
+    if (signaturePreviewUrl) URL.revokeObjectURL(signaturePreviewUrl);
+  }, [signaturePreviewUrl]);
 
   function editItem(itemId: string, field: 'response' | 'notes', value: string) {
     setInspection((current) => current && ({ ...current, rooms: current.rooms.map((room) => ({
@@ -164,6 +181,48 @@ export function InspectionDetail({ inspectionId }: Readonly<{ inspectionId: stri
     }
   }
 
+  async function saveSchedule(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy('schedule');
+    setError('');
+    try {
+      await apiRequest(`/api/v1/inspections/${inspectionId}/schedule`, {
+        method: 'PATCH',
+        body: JSON.stringify({ scheduledAtUtc: scheduledAtLocal ? new Date(scheduledAtLocal).toISOString() : null }),
+      });
+      await Promise.all([refresh(), refreshInspections()]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível salvar o horário.');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function saveAcceptance(signatureDataUrl: string) {
+    setBusy('acceptance');
+    setError('');
+    try {
+      await apiRequest(`/api/v1/inspections/${inspectionId}/acceptance`, {
+        method: 'POST',
+        body: JSON.stringify({ signatureDataUrl, acceptedTerms: true }),
+      });
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível registrar o aceite.');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function loadSignaturePreview() {
+    try {
+      const image = await apiBlob(`/api/v1/inspections/${inspectionId}/acceptance/signature`);
+      setSignaturePreviewUrl(URL.createObjectURL(image));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível carregar a assinatura.');
+    }
+  }
+
   async function finishInspection() {
     setBusy('complete');
     await completeInspection(inspectionId);
@@ -193,7 +252,8 @@ export function InspectionDetail({ inspectionId }: Readonly<{ inspectionId: stri
   if (!inspection) return <div className="panel empty-state" role="alert">{error || 'Vistoria não encontrada.'}</div>;
 
   const readOnly = inspection.status !== 'Draft' || (role !== 'Admin' && role !== 'Vistoriador');
-  const canApprove = role === 'Admin' && inspection.status === 'Completed' && reports.length > 0;
+  const canApprove = role === 'Admin' && inspection.status === 'Completed' && reports.length > 0 && Boolean(inspection.acceptance);
+  const canAccept = (role === 'Admin' || role === 'Vistoriador') && inspection.status === 'Completed' && reports.length > 0 && !inspection.acceptance;
   const totalItems = inspection.rooms.reduce((sum, room) => sum + room.items.length, 0);
   const answeredItems = inspection.rooms.reduce((sum, room) => sum + room.items.filter((item) => item.response && item.response !== 'Não verificado').length, 0);
   const progress = totalItems ? Math.round(answeredItems / totalItems * 100) : 0;
@@ -203,6 +263,12 @@ export function InspectionDetail({ inspectionId }: Readonly<{ inspectionId: stri
     <PageHeading title={summary?.property ?? 'Vistoria'} description={`${inspection.type === 'MoveIn' ? 'Entrada' : 'Saída'} · ${summary?.city ?? ''}`} />
     <div className="page-actions"><StatusBadge status={inspection.status === 'Approved' ? 'Aprovada' : inspection.status === 'Completed' ? 'Concluída' : 'Em andamento'} /><span>{answeredItems} de {totalItems} itens verificados ({progress}%)</span></div>
     {(error || storeError) && <p className="form-feedback form-feedback--error" role="alert">{error || storeError}</p>}
+    {!readOnly && <form className="panel compact-form schedule-editor" onSubmit={saveSchedule}>
+      <h2>Agendamento</h2>
+      <p>O horário é salvo no fuso da sua região e exibido na agenda da organização.</p>
+      <label className="form-field"><span>Data e hora</span><input type="datetime-local" value={scheduledAtLocal} onChange={(event) => setScheduledAtLocal(event.target.value)} /></label>
+      <button className="button button--primary" type="submit" disabled={Boolean(busy)}>{busy === 'schedule' ? 'Salvando...' : 'Salvar horário'}</button>
+    </form>}
     <section className="room-list" aria-label="Checklist por ambiente">{inspection.rooms.map((room) => <article className="room-card" key={room.id}>
       <div className="room-header"><div className="room-copy"><strong>{room.name}</strong><span>{room.items.length} itens</span></div></div>
       <div className="panel-body">{room.items.map((item) => <div className="panel compact-form" key={item.id}>
@@ -216,6 +282,8 @@ export function InspectionDetail({ inspectionId }: Readonly<{ inspectionId: stri
     {!readOnly && <form className="panel compact-form" onSubmit={addRoom}><label className="form-field"><span>Novo ambiente</span><input value={roomName} onChange={(event) => setRoomName(event.target.value)} maxLength={200} required /></label><button className="button button--soft" type="submit" disabled={Boolean(busy)}>Adicionar ambiente</button></form>}
     <section className="panel compact-form"><h2>Laudos</h2>{reports.length ? <ul>{reports.map((report) => <li key={report.id}>Versão {report.version} · {new Date(report.createdAtUtc).toLocaleDateString('pt-BR')} <button className="panel-link" type="button" onClick={() => download(`/api/v1/reports/${report.id}/download`)}>Abrir PDF</button></li>)}</ul> : <p>Nenhum laudo disponível. Após concluir, aguarde o processamento e atualize a lista.</p>}<button className="button button--outline" type="button" onClick={() => refresh().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : 'Não foi possível atualizar os laudos.'))}>Atualizar laudos</button></section>
     {inspection.type === 'MoveOut' && <section className="panel compact-form"><h2>Comparação com a entrada</h2>{comparison ? <><p><Link href={`/vistorias/${comparison.moveInInspectionId}`}>Abrir vistoria de entrada aprovada</Link></p><div className="room-list">{comparison.differences.map((difference, index) => <article className="room-card" key={`${difference.room}-${difference.item}-${index}`}><div className="panel-body"><strong>{difference.room} · {difference.item}</strong><p>Entrada: {difference.moveInResponse ?? 'Não registrado'}{difference.moveInNotes ? ` — ${difference.moveInNotes}` : ''}</p><p>Saída: {difference.moveOutResponse ?? 'Não registrado'}{difference.moveOutNotes ? ` — ${difference.moveOutNotes}` : ''}</p><StatusBadge status={difference.changed ? 'Alterado' : 'Sem alteração'} /></div></article>)}</div></> : <p>{comparisonError || 'Nenhuma vistoria de entrada aprovada foi encontrada para esta unidade.'}</p>}</section>}
-    <div className="detail-actions"><Link className="button button--outline" href="/vistorias">Voltar</Link>{!readOnly && <button className="button button--primary" type="button" disabled={Boolean(busy)} onClick={finishInspection}><Icon name="check" size={17} /> Concluir vistoria</button>}{canApprove && <button className="button button--primary" type="button" disabled={Boolean(busy)} onClick={approveInspection}><Icon name="check" size={17} /> Aprovar vistoria</button>}</div>
+    {inspection.acceptance && <section className="panel compact-form acceptance-panel"><h2>Aceite registrado</h2><p>Confirmado por <strong>{inspection.acceptance.signerName}</strong> ({inspection.acceptance.signerEmail}) em {new Date(inspection.acceptance.acceptedAtUtc).toLocaleString('pt-BR')}.</p><p className="panel-caption">Versão do termo: {inspection.acceptance.termsVersion}</p><button className="button button--outline" type="button" onClick={loadSignaturePreview}>Ver assinatura</button>{signaturePreviewUrl && <img className="signature-preview" src={signaturePreviewUrl} alt={`Assinatura de ${inspection.acceptance.signerName}`} />}</section>}
+    {canAccept && <SignatureCapture onSave={saveAcceptance} saving={busy === 'acceptance'} />}
+    <div className="detail-actions"><Link className="button button--outline" href="/vistorias">Voltar</Link>{!readOnly && <button className="button button--primary" type="button" disabled={Boolean(busy)} onClick={finishInspection}><Icon name="check" size={17} /> Concluir vistoria</button>}{inspection.status === 'Completed' && !inspection.acceptance && role === 'Admin' && <span className="panel-caption">Registre o aceite antes de aprovar.</span>}{canApprove && <button className="button button--primary" type="button" disabled={Boolean(busy)} onClick={approveInspection}><Icon name="check" size={17} /> Aprovar vistoria</button>}</div>
   </>;
 }
