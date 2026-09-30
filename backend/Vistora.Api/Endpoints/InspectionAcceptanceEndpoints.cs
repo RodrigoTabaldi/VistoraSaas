@@ -25,7 +25,8 @@ public static class InspectionAcceptanceEndpoints
     private static async Task<IResult> CreateAsync(
         Guid inspectionId, CreateInspectionAcceptanceRequest? request, VistoraDbContext db,
         ITenantContext tenant, HttpContext httpContext, IPrivateObjectStorage storage,
-        ILogger logger, CancellationToken cancellationToken)
+        // ILoggerFactory é registrado pelo host e inferido pelo binder de Minimal APIs.
+        ILoggerFactory loggerFactory, CancellationToken cancellationToken)
     {
         if (tenant.OrganizationId is not { } organizationId) return Results.Unauthorized();
         if (request is null || !request.AcceptedTerms || !SignaturePngValidator.TryDecode(request.SignatureDataUrl, out var png))
@@ -75,7 +76,8 @@ public static class InspectionAcceptanceEndpoints
             }
             catch (Exception cleanupException)
             {
-                logger.LogError(cleanupException, "Could not remove orphaned signature {ObjectKey} after database failure", acceptance.SignatureObjectKey);
+                loggerFactory.CreateLogger(nameof(InspectionAcceptanceEndpoints)).LogError(
+                    cleanupException, "Could not remove orphaned signature {ObjectKey} after database failure", acceptance.SignatureObjectKey);
             }
             if (exception is DbUpdateException)
                 return Results.Conflict(new { error = "o aceite desta vistoria foi registrado por outra solicitação", code = "acceptance_exists" });

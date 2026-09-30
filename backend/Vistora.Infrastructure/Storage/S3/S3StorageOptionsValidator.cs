@@ -8,12 +8,13 @@ public sealed class S3StorageOptionsValidator : IValidateOptions<S3StorageOption
     {
         var failures = new List<string>();
 
+        // HTTP só é permitido em endpoints locais quando a opção de desenvolvimento está habilitada.
         if (!Uri.TryCreate(options.Endpoint, UriKind.Absolute, out var endpoint) ||
             (endpoint.Scheme != Uri.UriSchemeHttps &&
              !(options.AllowInsecureLocalEndpoint && endpoint.Scheme == Uri.UriSchemeHttp &&
-               endpoint.Host is "minio" or "localhost" or "127.0.0.1")))
+               endpoint.Host is "rustfs" or "minio" or "localhost" or "127.0.0.1")))
         {
-            failures.Add("Storage:S3:Endpoint must be HTTPS, except for an explicitly enabled local MinIO endpoint.");
+            failures.Add("Storage:S3:Endpoint must be HTTPS, except for an explicitly enabled local S3 endpoint.");
         }
 
         if (string.IsNullOrWhiteSpace(options.Region)) failures.Add("Storage:S3:Region is required.");

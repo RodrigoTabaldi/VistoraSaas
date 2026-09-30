@@ -22,7 +22,7 @@ services:
       ConnectionStrings__Redis: ${VISTORA_REDIS_CONNECTION:-redis:6379}
       ConnectionStrings__RabbitMq: ${VISTORA_RABBITMQ_CONNECTION:-amqp://vistora:change-me@rabbitmq:5672/}
       Messaging__RabbitMq__QueueName: ${VISTORA_RABBITMQ_QUEUE:-vistora.messages}
-      Storage__S3__Endpoint: ${VISTORA_STORAGE_S3_ENDPOINT:-http://minio:9000}
+      Storage__S3__Endpoint: ${VISTORA_STORAGE_S3_ENDPOINT:-http://rustfs:9000}
       Storage__S3__Region: ${VISTORA_STORAGE_S3_REGION:-us-east-1}
       Storage__S3__Bucket: ${VISTORA_STORAGE_S3_BUCKET:-vistora-private}
       Storage__S3__AccessKeyId: ${VISTORA_STORAGE_S3_ACCESS_KEY_ID:-minioadmin}
@@ -47,7 +47,7 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      minio-init:
+      rustfs-init:
         condition: service_completed_successfully
 
   worker:
@@ -61,7 +61,7 @@ services:
       ConnectionStrings__Redis: ${VISTORA_REDIS_CONNECTION:-redis:6379}
       ConnectionStrings__RabbitMq: ${VISTORA_RABBITMQ_CONNECTION:-amqp://vistora:change-me@rabbitmq:5672/}
       Messaging__RabbitMq__QueueName: ${VISTORA_RABBITMQ_QUEUE:-vistora.messages}
-      Storage__S3__Endpoint: ${VISTORA_STORAGE_S3_ENDPOINT:-http://minio:9000}
+      Storage__S3__Endpoint: ${VISTORA_STORAGE_S3_ENDPOINT:-http://rustfs:9000}
       Storage__S3__Region: ${VISTORA_STORAGE_S3_REGION:-us-east-1}
       Storage__S3__Bucket: ${VISTORA_STORAGE_S3_BUCKET:-vistora-private}
       Storage__S3__AccessKeyId: ${VISTORA_STORAGE_S3_ACCESS_KEY_ID:-minioadmin}
@@ -76,7 +76,7 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      minio-init:
+      rustfs-init:
         condition: service_completed_successfully
     expose:
       - "8081"
@@ -87,31 +87,60 @@ services:
       retries: 3
       start_period: 30s
 
-  minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
-    command: server /data --console-address ':9001'
+  # Armazena evidências localmente por uma API compatível com S3.
+  rustfs:
+    image: rustfs/rustfs:1.0.0
+    command: ["/data"]
     environment:
-      MINIO_ROOT_USER: ${VISTORA_STORAGE_S3_ACCESS_KEY_ID:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${VISTORA_STORAGE_S3_SECRET_ACCESS_KEY:-minioadmin123}
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+      RUSTFS_ACCESS_KEY: ${VISTORA_STORAGE_S3_ACCESS_KEY_ID:-minioadmin}
+      RUSTFS_SECRET_KEY: ${VISTORA_STORAGE_S3_SECRET_ACCESS_KEY:-minioadmin123}
+      RUSTFS_CONSOLE_ENABLE: "true"
     ports:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - minio-data:/data
-
-  minio-init:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+      - rustfs-data:/data
     depends_on:
-      minio:
+      rustfs-permissions:
+        condition: service_completed_successfully
+    networks:
+      default:
+        aliases:
+          - minio
+
+  # Prepara a raiz do volume para o usuário sem privilégios do RustFS.
+  rustfs-permissions:
+    image: alpine:3.22
+    user: root
+    volumes:
+      - rustfs-data:/data
+    command: ["sh", "-c", "chown 10001:10001 /data"]
+    restart: "no"
+
+  # Cria o bucket quando o endpoint S3 já está pronto e mantém reexecuções idempotentes.
+  rustfs-init:
+    image: amazon/aws-cli:2.36.44
+    depends_on:
+      rustfs:
         condition: service_started
     environment:
-      MINIO_ROOT_USER: ${VISTORA_STORAGE_S3_ACCESS_KEY_ID:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${VISTORA_STORAGE_S3_SECRET_ACCESS_KEY:-minioadmin123}
+      AWS_ACCESS_KEY_ID: ${VISTORA_STORAGE_S3_ACCESS_KEY_ID:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${VISTORA_STORAGE_S3_SECRET_ACCESS_KEY:-minioadmin123}
+      AWS_DEFAULT_REGION: ${VISTORA_STORAGE_S3_REGION:-us-east-1}
+      AWS_EC2_METADATA_DISABLED: "true"
       VISTORA_BUCKET: ${VISTORA_STORAGE_S3_BUCKET:-vistora-private}
     entrypoint: ["/bin/sh", "-c"]
-    command: >-
-      until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do sleep 2; done;
-      mc mb --ignore-existing "local/$$VISTORA_BUCKET"
+    command:
+      - |
+        set -eu
+        until aws --endpoint-url http://rustfs:9000 s3api list-buckets >/dev/null 2>&1; do
+          sleep 2
+        done
+        if ! aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket "$$VISTORA_BUCKET" >/dev/null 2>&1; then
+          aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket "$$VISTORA_BUCKET"
+        fi
 
   postgres:
     image: postgres:17-alpine
@@ -156,4 +185,4 @@ services:
 volumes:
   postgres-data:
   api-auth-keys:
-  minio-data:
+  rustfs-data:

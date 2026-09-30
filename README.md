@@ -7,11 +7,11 @@ SaaS multiempresa para vistorias imobiliárias. O repositório contém frontend 
 Pré-requisitos: .NET SDK compatível com `global.json`, Node.js 24+ e Docker Desktop em execução.
 
 ```powershell
-Copy-Item .env.example .env
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
 docker compose up --build
 ```
 
-Abra `http://localhost:3000`; a API responde em `http://localhost:8080/health`. O Compose inicia PostgreSQL, Redis, RabbitMQ e MinIO, cria o bucket local e aplica migrations em `Development`. O MinIO local usa HTTP apenas dentro da rede do Compose. A interface do MinIO fica em `http://localhost:9001`.
+Abra `http://localhost:3000`; a API responde em `http://localhost:8080/health`. O Compose inicia PostgreSQL, Redis, RabbitMQ e RustFS, cria o bucket local e aplica migrations em `Development`. O RustFS local usa HTTP apenas dentro da rede do Compose. A interface do RustFS fica em `http://localhost:9001`. O nome interno `minio` continua como alias para arquivos `.env` já existentes.
 
 Para validar separadamente:
 
@@ -58,7 +58,7 @@ Esses itens precisam de regras de produto, implementação e verificação antes
 
 ## Configuração S3
 
-`.env.example` usa MinIO local. Para produção, configure um endpoint S3 HTTPS privado, região, bucket e credenciais exclusivas do backend. Não envie chaves S3 ao frontend. `VISTORA_S3_ALLOW_INSECURE_LOCAL` libera HTTP somente para os hosts locais `minio`, `localhost` e `127.0.0.1`.
+`.env.example` usa RustFS local. Para produção, configure um endpoint S3 HTTPS privado, região, bucket e credenciais exclusivas do backend. Não envie chaves S3 ao frontend. `VISTORA_S3_ALLOW_INSECURE_LOCAL` libera HTTP somente para os hosts locais `rustfs`, `minio`, `localhost` e `127.0.0.1`. A configuração usa um volume novo `rustfs-data`; volumes antigos `minio-data` ficam preservados e não são migrados automaticamente.
 
 ## Estrutura
 

@@ -34,12 +34,14 @@ public sealed class S3StorageOptionsValidatorTests
         Assert.True(result.Failed);
     }
 
-    [Fact]
-    public void Validate_accepts_only_explicit_local_http_storage()
+    [Theory]
+    [InlineData("http://minio:9000")]
+    [InlineData("http://rustfs:9000")]
+    public void Validate_accepts_only_explicit_local_http_storage(string endpoint)
     {
         var options = new S3StorageOptions
         {
-            Endpoint = "http://minio:9000", Region = "us-east-1", Bucket = "vistora-private",
+            Endpoint = endpoint, Region = "us-east-1", Bucket = "vistora-private",
             AccessKeyId = "local-user", SecretAccessKey = "local-secret",
             AllowInsecureLocalEndpoint = true
         };
