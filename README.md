@@ -1,79 +1,480 @@
 # Vistora
 
-SaaS multiempresa para vistorias imobiliárias. O repositório contém frontend Next.js, API e Worker .NET 10, PostgreSQL com RLS por organização, Redis, RabbitMQ e armazenamento S3 privado. A arquitetura separa domínio, casos de uso, infraestrutura e interfaces.
+A multi-tenant platform for organizing real estate inspections, reusable checklists, evidence and report workflows.
 
-## Execução local
+[English](#english) | [Português](#português)
 
-Pré-requisitos: .NET SDK compatível com `global.json`, Node.js 24+ e Docker Desktop em execução.
+[![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![Next.js 16](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org/)
+[![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript 5](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![PostgreSQL 17](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Redis 7](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)](https://redis.io/)
+[![RabbitMQ 4](https://img.shields.io/badge/RabbitMQ-4-FF6600?logo=rabbitmq&logoColor=white)](https://www.rabbitmq.com/)
+[![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+
+![Vistora dashboard](docs/images/dashboard.png)
+
+## English
+
+### Overview
+
+Vistora brings property and unit records, inspection checklists, photo evidence and report generation into one organization-scoped workflow. The repository contains a Next.js web app, a .NET API and a background worker, backed by PostgreSQL and supporting services.
+
+### The problem it addresses
+
+Inspection records can become fragmented across forms, photos and follow-up documents. Vistora models each inspection against a property unit, gives teams a structured checklist, and keeps its evidence and report connected to that inspection.
+
+### Key features
+
+- Create organizations and accounts, then manage members with the Admin, Inspector (`Vistoriador`) and Reader (`Leitor`) roles. Invitation links are single-use and expire after seven days; since email delivery is not configured, the app provides a link for manual sharing.
+- Start an inspection by entering its address, without registering a property or checklist template first. Property and unit records are saved with the inspection. Existing units remain available for inspection history.
+- Register properties and units.
+- Build reusable checklist templates with rooms and items, or use the initial checklist. Completion requires at least one item and all items verified.
+- Schedule and record move-in or move-out inspections, including responses, notes and photo evidence.
+- Compare a move-out inspection with the latest approved move-in inspection for the same unit.
+- Generate PDF reports asynchronously through a RabbitMQ queue and .NET worker.
+- Record an electronic acceptance with a drawn signature, signer details, timestamp and terms version. This is an auditable application record, not a certified digital signature.
+- Approve a completed inspection only after a report and acceptance are present; checklist data cannot be edited after completion.
+- View inspection summaries, status indicators, reports and team settings in the web interface.
+
+### Screenshots
+
+The dashboard above is the primary project screenshot. These additional screenshots show the login, inspection, property and analytics screens.
+
+<table>
+  <tr>
+    <td width="50%" align="center"><strong>Login</strong><br><img src="./docs/images/login.png" alt="Vistora login screen" width="100%"></td>
+    <td width="50%" align="center"><strong>Inspections</strong><br><img src="./docs/images/inspections.png" alt="Vistora inspections screen" width="100%"></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><strong>Properties</strong><br><img src="./docs/images/properties.png" alt="Vistora properties screen" width="100%"></td>
+    <td width="50%" align="center"><strong>Analytics</strong><br><img src="./docs/images/analytics.png" alt="Vistora analytics screen" width="100%"></td>
+  </tr>
+</table>
+
+### Tech stack
+
+| Area | Technologies and components |
+| --- | --- |
+| **Backend** | C#, .NET 10, ASP.NET Core Minimal APIs, Entity Framework Core 10, Npgsql, PDFsharp/MigraDoc |
+| **Frontend** | Next.js 16 App Router, React 19, TypeScript 5 |
+| **Database** | PostgreSQL 17, EF Core migrations and PostgreSQL Row-Level Security (RLS) |
+| **Infrastructure** | Docker Compose; Redis 7 for caching; PostgreSQL for transactional idempotency; RabbitMQ 4 for message and report queues; RustFS for local S3-compatible object storage |
+| **Tools** | GitHub Actions for CI and container image publishing to GHCR; xUnit; Testcontainers for PostgreSQL integration tests; AWS SDK for S3-compatible storage |
+
+**Routing note:** the Next.js server rewrites `/api/*` to the API. This repository does not configure Nginx, Cloudflare, a load balancer, or production infrastructure.
+
+### Architecture
+
+The backend is organized into Domain, Application and Infrastructure projects, with separate API and Worker hosts. The browser calls the web app; Next.js forwards API paths to ASP.NET Core. The API handles synchronous requests and publishes report jobs. The Worker consumes those jobs, generates PDFs and stores the resulting files.
+
+```mermaid
+flowchart LR
+  Browser[Browser] --> Web[Next.js web app]
+  Web -->|"/api/* rewrite"| API[ASP.NET Core Minimal API]
+  API --> DB[(PostgreSQL 17<br/>EF Core + RLS)]
+  API --> Redis[(Redis 7<br/>cache)]
+  API --> MQ[[RabbitMQ 4]]
+  API --> Storage[(RustFS locally<br/>S3-compatible storage)]
+  MQ --> Worker[.NET background worker]
+  Worker --> DB
+  Worker --> Storage
+  CI[GitHub Actions] -. verify and publish images .-> GHCR[GitHub Container Registry]
+```
+
+The local Compose stack includes the frontend, API, Worker, PostgreSQL, Redis, RabbitMQ and RustFS. The existing `docs/Arquitetura.jpeg` is a conceptual sketch; its Cloudflare, Nginx, multiple API and Supabase elements are not configured by the current repository.
+
+### Project structure
+
+```text
+.github/workflows/ci.yml                 CI, tests and image publishing
+backend/
+  Vistora.Domain/                        Entities and domain rules
+  Vistora.Application/                   Use cases and application contracts
+  Vistora.Infrastructure/                PostgreSQL, Redis, RabbitMQ, S3 and PDF
+  Vistora.Api/                           HTTP API and authentication
+  Vistora.Worker/                        Background message and report processing
+  Vistora.Tests/                         Unit and PostgreSQL integration tests
+frontend/                                Next.js app, components and API client
+docs/images/                             README screenshots
+infra/                                   Infrastructure and PostgreSQL notes
+docker-compose.yml                       Local services
+.env.example                             Local configuration template
+global.json                              .NET SDK selection
+```
+
+### Technical decisions
+
+- **Separate domain and infrastructure concerns.** Domain rules and application use cases live apart from database, storage and messaging implementations. HTTP endpoints use ASP.NET Core Minimal APIs; data access uses EF Core rather than a generic repository layer.
+- **Enforce tenant isolation at two levels.** EF Core query filters scope records by organization, while PostgreSQL RLS policies enforce the organization boundary in the database. Interceptors set the tenant context on database sessions, and a role guard rejects application connections with RLS-bypassing privileges.
+- **Generate reports in the background.** The API records a report job and sends it through RabbitMQ so PDF generation runs in the Worker. Idempotency keys and persisted job state help prevent duplicate work when completion requests are repeated.
+- **Keep uploaded files outside relational storage.** An S3-compatible storage interface keeps evidence and reports in object storage; the local Compose environment uses RustFS. Stored file metadata includes SHA-256 hashes that are checked when files are read.
+- **Persist request idempotency transactionally.** PostgreSQL commits business data and replayable results together; Redis supports the application cache abstraction.
+- **Use cookie sessions for the web app.** The API hashes passwords and issues HttpOnly cookies; role policies govern writes. Bearer JWT validation is available when an authority and audience are configured.
+- **Keep browser API calls same-origin.** Next.js rewrites `/api/*` to the backend, including the internal Compose service address in the container build.
+
+### Engineering highlights
+
+- Versioned REST endpoints implemented with ASP.NET Core Minimal APIs.
+- Multi-tenant data modeling, EF Core migrations, query filters and PostgreSQL RLS.
+- Dependency injection and focused use cases for inspection and checklist workflows.
+- Cookie authentication, role-based authorization, request rate limiting on registration and login, and a custom guard for cookie-authenticated writes.
+- SHA-256 integrity checks and file signature validation for uploaded evidence and signatures.
+- Asynchronous report jobs, RabbitMQ retry/failure queues, PostgreSQL-backed transactional idempotency and worker health checks.
+- Docker multi-stage builds and a GitHub Actions workflow that builds and tests the application, validates Compose, then publishes images to GHCR on successful pushes to `main`.
+
+### API highlights
+
+Business endpoints under `/api/v1` require authentication, except registration, login and invitation acceptance. The `/health` endpoint is public. Write access is further restricted by role policies.
+
+| Endpoints | Purpose |
+| --- | --- |
+| `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/logout` | Account registration and cookie session management |
+| `GET /api/v1/me` | Current user and organization context |
+| `GET/POST /api/v1/properties`; `GET/POST /api/v1/properties/{propertyId}/units` | Properties and units |
+| `GET /api/v1/checklist-templates`; `GET /api/v1/checklist-templates/manage`; `POST /api/v1/checklist-templates`; `PUT /api/v1/checklist-templates/{templateId}` | Checklist templates |
+| `GET/POST /api/v1/inspections`; `POST /api/v1/inspections/from-template` | List and create inspections |
+| `GET /api/v1/inspections/{inspectionId}`; `PATCH /api/v1/inspections/{inspectionId}/schedule`; `POST /api/v1/inspections/{inspectionId}/complete`; `PATCH /api/v1/inspections/{inspectionId}/status` | Inspection details, scheduling, report-job creation and status transitions |
+| `GET /api/v1/inspections/{inspectionId}/comparison` | Compare related inspections |
+| `POST /api/v1/items/{itemId}/evidence`; `GET /api/v1/evidence/{evidenceId}/download` | Upload and download inspection evidence |
+| `GET /api/v1/inspections/{inspectionId}/reports`; `GET /api/v1/reports/{reportId}/download` | List and download reports |
+| `GET/POST /api/v1/inspections/{inspectionId}/acceptance` | Record or view inspection acceptance |
+| `GET /api/v1/team`; `POST /api/v1/team/invitations`; `DELETE /api/v1/team/invitations/{invitationId}`; `POST /api/v1/auth/invitations/accept` | Team members and invitations |
+| `GET/PATCH /api/v1/organization`; `GET /health` | Organization settings and service health |
+
+### Database model
+
+PostgreSQL stores organizations, users and accounts, invitations, properties, units, checklist templates, inspections, rooms, items, evidence metadata, reports, report jobs, electronic acceptances and audit events.
+
+Organization-scoped tables carry an organization identifier. EF Core migrations create the schema and RLS policies. Integration tests use PostgreSQL through Testcontainers to exercise tenant isolation and database-role constraints.
+
+### Run locally
+
+The quickest way to run the complete local stack is Docker Compose. In a terminal at the repository root:
 
 ```powershell
-if (!(Test-Path .env)) { Copy-Item .env.example .env }
 docker compose up --build
 ```
 
-Abra `http://localhost:3000`; a API responde em `http://localhost:8080/health`. O Compose inicia PostgreSQL, Redis, RabbitMQ e RustFS, cria o bucket local e aplica migrations em `Development`. O RustFS local usa HTTP apenas dentro da rede do Compose. A interface do RustFS fica em `http://localhost:9001`. O nome interno `minio` continua como alias para arquivos `.env` já existentes.
+Open:
 
-Para validar separadamente:
+- Web app: [http://localhost:3000](http://localhost:3000)
+- API health: [http://localhost:8080/health](http://localhost:8080/health)
+- RabbitMQ management: [http://localhost:15672](http://localhost:15672)
+- RustFS console: [http://localhost:9001](http://localhost:9001)
+
+Compose provides development defaults. To customize them, copy `.env.example` to `.env` and edit the values locally. The API applies migrations automatically in the Development environment. Use `docker compose down` to stop the stack; named data volumes remain in place.
+
+### Prerequisites
+
+- Docker Engine/Desktop with Docker Compose v2.
+- .NET SDK 10.0.400 to build or test the backend outside Docker. The selected SDK is recorded in `global.json`.
+- Node.js 24 and npm to install or build the frontend outside Docker.
+
+### Environment variables
+
+The local template is `.env.example`. Compose supplies development defaults; set these variables in `.env` when replacing local services or credentials. No secret values are required in this README.
+
+| Variable group | Purpose |
+| --- | --- |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT` | Local PostgreSQL container |
+| `REDIS_PORT`, `RABBITMQ_PORT`, `RABBITMQ_MANAGEMENT_PORT`, `RABBITMQ_DEFAULT_USER`, `RABBITMQ_DEFAULT_PASS` | Local Redis and RabbitMQ services |
+| `VISTORA_POSTGRES_CONNECTION`, `VISTORA_POSTGRES_MIGRATION_CONNECTION` | Application and development migration connections |
+| `VISTORA_REDIS_CONNECTION`, `VISTORA_RABBITMQ_CONNECTION`, `VISTORA_RABBITMQ_QUEUE` | Cache/idempotency and message broker connections |
+| `VISTORA_STORAGE_S3_ENDPOINT`, `VISTORA_STORAGE_S3_REGION`, `VISTORA_STORAGE_S3_BUCKET`, `VISTORA_STORAGE_S3_ACCESS_KEY_ID`, `VISTORA_STORAGE_S3_SECRET_ACCESS_KEY`, `VISTORA_S3_ALLOW_INSECURE_LOCAL` | S3-compatible object storage |
+| `VISTORA_AUTHORITY`, `VISTORA_AUTH_AUDIENCE` | Optional bearer JWT validation; audience is required when an authority is set |
+| `ASPNETCORE_ENVIRONMENT` | API and Worker runtime environment |
+| `VISTORA_API_URL` | Frontend Docker build argument for the API rewrite; Compose sets the internal API address |
+
+The migration connection is used automatically only for local Development migrations. For non-local environments, use separately managed credentials and configure a private HTTPS S3 endpoint. Never commit a populated `.env` file or send storage credentials to the browser. The frontend Docker build sets `VISTORA_API_URL` to the internal API service address.
+
+### Install, build and test
+
+Run backend commands from the repository root:
 
 ```powershell
 dotnet restore backend/Vistora.slnx
-dotnet build backend/Vistora.slnx --no-restore
-dotnet test backend/Vistora.Tests/Vistora.Tests.csproj --no-restore
+dotnet build backend/Vistora.slnx --no-restore --configuration Release
+dotnet test backend/Vistora.Tests/Vistora.Tests.csproj --no-restore --configuration Release
+```
+
+Build the frontend from its directory. On Windows PowerShell:
+
+```powershell
 Set-Location frontend
 npm.cmd ci
 npm.cmd test
 npm.cmd run build
 ```
 
-Os testes de integração PostgreSQL usam Testcontainers e exigem Docker disponível. O frontend usa o proxy `/api/*` definido em `frontend/next.config.ts`. Fora do Compose, `VISTORA_API_URL` deve apontar para a API acessível pelo servidor Next.
+On macOS or Linux, use `npm ci` and `npm run build` in `frontend/`. PostgreSQL integration tests use Testcontainers and require Docker to be available.
 
-## Banco e isolamento
+### Challenges and learnings
 
-O cadastro cria a organização, o usuário administrador e as credenciais em transação. Credenciais são armazenadas como hash. Entidades de negócio usam filtro por organização no EF Core e políticas RLS no PostgreSQL. API e Worker usam a role `vistora_app`; o `DatabaseRoleGuard` impede execução com `SUPERUSER` ou `BYPASSRLS`. Em `Development`, apenas a etapa de migration usa `VISTORA_POSTGRES_MIGRATION_CONNECTION` administrativa. Em produção, aplique migrations antes de iniciar os serviços. A migration cria a role local com senha `change-me`; troque a senha antes de qualquer uso fora do desenvolvimento.
+- Tenant isolation needs to follow the request from authenticated organization context through EF Core and into the PostgreSQL session. The integration suite tests this against PostgreSQL because an in-memory provider cannot exercise RLS or connection pooling.
+- Completing an inspection starts work that can outlive an HTTP request. The persisted report-job state, RabbitMQ delivery and idempotency handling make that workflow explicit.
+- Object storage adds integrity and lifecycle concerns beyond uploading a file. The API validates upload content and checks stored SHA-256 values when serving protected files.
+- The retry and failed-message queues exist, but inspecting and replaying failed messages still needs an operational procedure.
 
-## Fluxo implementado
+### Roadmap
 
-Ao criar uma vistoria, o usuário pode informar o endereço na mesma tela, sem cadastrar previamente um imóvel. Imóvel e unidade são salvos junto com a vistoria; nome e complemento são opcionais. Um checklist inicial permite começar sem cadastrar um modelo, inclusive no perfil Vistoriador. A conclusão exige pelo menos um item e todos os itens verificados. Também é possível selecionar unidades existentes para preservar o histórico de entrada e saída. O usuário cadastra imóveis e unidades, cria e edita modelos completos de checklist e abre vistorias de entrada ou saída. A vistoria copia ambientes e itens do modelo, registra respostas, observações e fotos, e pode receber data e hora em UTC. Uma saída é vinculada à entrada aprovada mais recente da mesma unidade, quando existe, e a interface compara respostas e observações. O Worker gera um PDF com dados do imóvel, respostas, observações e evidências JPEG/PNG. Evidências WebP são referenciadas no PDF e continuam acessíveis pela aplicação. O download de fotos, laudos e assinaturas passa por rotas autenticadas que conferem o SHA-256.
+The implemented items below are visible in the API, Worker, tests and web app. The follow-up items are gaps documented by the current project; they do not have committed delivery dates.
 
-Administradores podem persistir os dados da organização, gerenciar membros e criar convites de uso único válidos por sete dias. A API guarda apenas o hash do token; como não há provedor de e-mail configurado, a interface oferece o link para cópia e envio manual. A vistoria concluída com relatório pode receber aceite eletrônico com imagem desenhada, usuário, data, versão dos termos e trilha de auditoria. A aprovação exige perfil administrador, relatório e aceite. Esse registro não é uma assinatura digital certificada. Após a conclusão, os dados do checklist não podem ser alterados pelos endpoints de edição.
+**Implemented**
 
-As rotas de escrita usam perfis: `Admin` gerencia imóveis, unidades, modelos, convites, organização, relatórios e aprovação; `Admin` e `Vistoriador` podem criar e editar vistorias em rascunho e registrar aceite; `Leitor` tem acesso de leitura. O primeiro usuário cadastrado recebe `Admin`.
+- Organization accounts, role-based access, member invitations and organization settings.
+- Property/unit management, checklist templates and move-in/move-out inspections.
+- Scheduling, inspection comparison, evidence uploads and electronic acceptance records.
+- Asynchronous PDF report generation, local S3-compatible storage and CI image publishing.
 
-## Saúde e filas
+**Next steps identified**
 
-`/health` verifica PostgreSQL, Redis e RabbitMQ na API. O Worker expõe o mesmo caminho na porta interna `8081`; o Compose usa os dois endpoints para marcar os serviços como saudáveis antes de iniciar seus dependentes. Mensagens inválidas vão para `<fila>.failed`; falhas transitórias recebem até cinco novas tentativas, com intervalo de 30 segundos, pela fila `<fila>.retry`. A inspeção e o reprocessamento operacional das mensagens falhas ainda precisam de procedimento.
+- Configure email delivery for invitations and account recovery.
+- Document and operate inspection/replay for failed messages.
+- Decide how WebP evidence should appear in generated PDFs; current PDF output embeds JPEG/PNG images, while WebP remains available through the application.
+- Select a production hosting target and define deployment, backup, availability and performance procedures.
 
-## Limites atuais
+### Project status
 
-- Convites ainda precisam ser enviados manualmente; entrega de e-mail e recuperação de senha não estão configuradas.
-- O aceite é um registro eletrônico auditável; não usa certificado digital ou provedor de assinatura.
-- A comparação de vistorias usa o nome de ambiente e item; alterações nesses nomes podem aparecer como itens ausentes.
-- O PDF não incorpora imagens WebP. A inspeção e o reprocessamento operacional das mensagens na fila de falha ainda precisam de procedimento.
-- Recuperação de desastre, metas de disponibilidade e desempenho e implantação de produção não foram validadas. A implantação depende de um destino e credenciais de infraestrutura.
+**In development.** The repository includes a runnable local Compose stack and CI for backend build/tests, frontend build and Compose validation. Successful pushes to `main` publish API, Worker and frontend images to GHCR; the workflow does not deploy them. Production operations and availability have not been validated.
 
-Esses itens precisam de regras de produto, implementação e verificação antes de considerar o SaaS completo.
+### Author
 
-## CI/CD
+**Rodrigo Tabaldi**
 
-`.github/workflows/ci.yml` compila backend e frontend, executa testes unitários e de integração com Testcontainers e valida o Compose em pull requests e pushes na `main`. Em pushes aprovados na `main`, publica imagens `api`, `worker` e `frontend` no GHCR, com tags `latest` e SHA. Publicar imagens não implanta os serviços nem migra o banco de produção.
+Software Engineering student focused on Backend Development, .NET and Full Stack applications.
 
-## Configuração S3
+GitHub: [Vistora repository](https://github.com/RodrigoTabaldi/VistoraSaas)
 
-`.env.example` usa RustFS local. Para produção, configure um endpoint S3 HTTPS privado, região, bucket e credenciais exclusivas do backend. Não envie chaves S3 ao frontend. `VISTORA_S3_ALLOW_INSECURE_LOCAL` libera HTTP somente para os hosts locais `rustfs`, `minio`, `localhost` e `127.0.0.1`. A configuração usa um volume novo `rustfs-data`; volumes antigos `minio-data` ficam preservados e não são migrados automaticamente.
+### Consistency and recovery
 
-## Estrutura
+Creation and completion routes require `Idempotency-Key` (up to 200 characters). Business data and the replayable result are committed in the same PostgreSQL transaction. Reusing a key with different request data returns a conflict. Previous Redis-only results are not migrated; drain in-flight writes before upgrading.
+
+Creation and approval events use a transactional outbox with RabbitMQ publisher confirmations. Delivery is at least once, so consumers must tolerate repeated message IDs. Report jobs are persisted before queue dispatch; administrators can retry failed jobs from the inspection screen. The `AddDurableOperations` migration enables tenant RLS on the new tables. Apply migrations before updating the production API and Worker. See [operations procedures](infra/OPERATIONS.md).
+
+Inspections, schedules and reports use server-side filtering and pagination. Indicators are aggregated in PostgreSQL, and checklist progress reflects verified items.
+
+## Português
+
+### Visão geral
+
+A Vistora reúne imóveis e unidades, checklists, evidências fotográficas e geração de laudos em um fluxo por organização. O repositório inclui uma aplicação web em Next.js, uma API e um Worker em .NET, com PostgreSQL e serviços de apoio.
+
+### Problema que resolve
+
+Registros de vistoria podem ficar espalhados entre formulários, fotos e documentos de acompanhamento. A Vistora associa cada vistoria a uma unidade, organiza as respostas em checklists e mantém evidências e laudos ligados ao mesmo registro.
+
+### Funcionalidades principais
+
+- Criar organizações e contas e gerenciar membros com os perfis Admin, Vistoriador e Leitor.
+- Gerar convites de uso único com validade de sete dias. Como o envio de e-mails não está configurado, a aplicação disponibiliza o link para compartilhamento manual.
+- Cadastrar imóveis e unidades.
+- Criar modelos reutilizáveis de checklist com ambientes e itens.
+- Agendar e registrar vistorias de entrada ou saída, com respostas, observações e evidências fotográficas.
+- Comparar uma vistoria de saída com a vistoria de entrada aprovada mais recente da mesma unidade.
+- Gerar laudos em PDF de forma assíncrona por meio de uma fila RabbitMQ e um Worker .NET.
+- Registrar aceite eletrônico com assinatura desenhada, dados do signatário, data e versão dos termos. É um registro auditável da aplicação, não uma assinatura digital certificada.
+- Aprovar uma vistoria concluída somente após a geração de um laudo e o registro do aceite; os dados do checklist deixam de ser editáveis após a conclusão.
+- Consultar resumos, indicadores de status, laudos e configurações da equipe na interface web.
+
+### Capturas de tela
+
+O dashboard acima é a imagem principal do projeto. As capturas de login, vistorias, imóveis e análises estão na seção [Screenshots](#screenshots).
+
+### Stack tecnológica
+
+| Área | Tecnologias e componentes |
+| --- | --- |
+| **Backend** | C#, .NET 10, ASP.NET Core Minimal APIs, Entity Framework Core 10, Npgsql, PDFsharp/MigraDoc |
+| **Frontend** | Next.js 16 App Router, React 19, TypeScript 5 |
+| **Banco de dados** | PostgreSQL 17, migrations do EF Core e Row-Level Security (RLS) do PostgreSQL |
+| **Infraestrutura** | Docker Compose; Redis 7 para cache; PostgreSQL para idempotência transacional; RabbitMQ 4 para filas de mensagens e laudos; RustFS para armazenamento local compatível com S3 |
+| **Ferramentas** | GitHub Actions para CI e publicação de imagens no GHCR; xUnit; Testcontainers para testes de integração com PostgreSQL; AWS SDK para armazenamento compatível com S3 |
+
+**Roteamento:** o servidor Next.js redireciona `/api/*` para a API. Este repositório não configura Nginx, Cloudflare, balanceador de carga ou infraestrutura de produção.
+
+### Arquitetura
+
+O backend separa os projetos Domain, Application e Infrastructure, com hosts distintos para API e Worker. O navegador acessa a aplicação web; o Next.js encaminha as rotas da API para ASP.NET Core. A API atende requisições e publica jobs de laudo. O Worker consome esses jobs, gera PDFs e armazena os arquivos resultantes.
+
+```mermaid
+flowchart LR
+  Browser[Navegador] --> Web[Aplicação Next.js]
+  Web -->|"/api/* rewrite"| API[ASP.NET Core Minimal API]
+  API --> DB[(PostgreSQL 17<br/>EF Core + RLS)]
+  API --> Redis[(Redis 7<br/>cache)]
+  API --> MQ[[RabbitMQ 4]]
+  API --> Storage[(RustFS local<br/>armazenamento compatível com S3)]
+  MQ --> Worker[Worker .NET]
+  Worker --> DB
+  Worker --> Storage
+  CI[GitHub Actions] -. valida e publica imagens .-> GHCR[GitHub Container Registry]
+```
+
+O Compose local inicia frontend, API, Worker, PostgreSQL, Redis, RabbitMQ e RustFS. O arquivo existente `docs/Arquitetura.jpeg` é um esboço conceitual; os componentes Cloudflare, Nginx, múltiplas APIs e Supabase nele desenhados não estão configurados no repositório atual.
+
+### Estrutura do projeto
 
 ```text
-frontend/                       Next.js, React, TypeScript, PWA
-backend/Vistora.Domain/         Modelos e regras sem dependências externas
-backend/Vistora.Application/    Casos de uso e contratos
-backend/Vistora.Infrastructure/ Persistência, S3, mensageria e PDF
-backend/Vistora.Api/            Interface HTTP
-backend/Vistora.Worker/         Processamento assíncrono
-backend/Vistora.Tests/          Testes unitários e integrados
-infra/                          Scripts operacionais
-docs/                           Documentação de produto
+.github/workflows/ci.yml                 CI, testes e publicação de imagens
+backend/
+  Vistora.Domain/                        Entidades e regras de domínio
+  Vistora.Application/                   Casos de uso e contratos
+  Vistora.Infrastructure/                PostgreSQL, Redis, RabbitMQ, S3 e PDF
+  Vistora.Api/                           API HTTP e autenticação
+  Vistora.Worker/                        Processamento de mensagens e laudos
+  Vistora.Tests/                         Testes unitários e de integração PostgreSQL
+frontend/                                Aplicação Next.js, componentes e cliente de API
+docs/images/                             Capturas usadas neste README
+infra/                                   Notas de infraestrutura e PostgreSQL
+docker-compose.yml                       Serviços locais
+.env.example                             Modelo de configuração local
+global.json                              Seleção do SDK .NET
 ```
+
+### Decisões técnicas
+
+- **Separação entre domínio e infraestrutura.** Regras de domínio e casos de uso ficam separados das implementações de banco, armazenamento e mensageria. A API usa Minimal APIs do ASP.NET Core; o acesso a dados usa EF Core diretamente, sem uma camada genérica de repositórios.
+- **Isolamento por organização em duas camadas.** Filtros do EF Core limitam registros por organização, enquanto políticas RLS aplicam essa separação no PostgreSQL. Interceptors definem o contexto de organização na sessão do banco, e uma verificação impede conexões da aplicação com privilégios que contornem o RLS.
+- **Geração de laudos em segundo plano.** A API registra um job e o publica no RabbitMQ para que o Worker gere o PDF. Chaves de idempotência e o estado persistido do job ajudam a evitar trabalho duplicado quando a conclusão é solicitada novamente.
+- **Arquivos fora do banco relacional.** Uma interface de armazenamento compatível com S3 mantém fotos e laudos em armazenamento de objetos; o Compose local usa RustFS. Os metadados incluem hashes SHA-256, verificados durante a leitura.
+- **Idempotência transacional.** O PostgreSQL confirma dados de negócio e resultados de repetição juntos; o Redis atende à abstração de cache da aplicação.
+- **Sessões por cookie para a aplicação web.** A API armazena hashes de senhas e emite cookies HttpOnly; políticas por perfil controlam as operações de escrita. A validação de JWT Bearer pode ser habilitada com autoridade e público configurados.
+- **Chamadas de API same-origin no navegador.** O Next.js redireciona `/api/*` ao backend, inclusive ao endereço interno do serviço no Compose.
+
+### Destaques de engenharia
+
+- Endpoints REST versionados com ASP.NET Core Minimal APIs.
+- Modelagem multi-tenant, migrations do EF Core, filtros por organização e RLS no PostgreSQL.
+- Injeção de dependências e casos de uso específicos para fluxos de vistoria e checklist.
+- Autenticação por cookie, autorização por perfil, limitação de requisições no cadastro e login e proteção própria para escritas autenticadas por cookie.
+- Verificação de integridade SHA-256 e validação de assinatura do arquivo para evidências e assinaturas enviadas.
+- Jobs de laudo assíncronos, filas de retry e falha no RabbitMQ, idempotência transacional com PostgreSQL e health checks do Worker.
+- Imagens Docker com build em múltiplas etapas e workflow do GitHub Actions que compila e testa a aplicação, valida o Compose e publica imagens no GHCR após pushes bem-sucedidos em `main`.
+
+### Principais endpoints da API
+
+As rotas de negócio sob `/api/v1` exigem autenticação, exceto cadastro, login e aceite de convite. A rota `/health` é pública. As operações de escrita também são limitadas pelas políticas de perfil.
+
+| Endpoints | Finalidade |
+| --- | --- |
+| `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/logout` | Cadastro e gerenciamento da sessão por cookie |
+| `GET /api/v1/me` | Usuário atual e contexto da organização |
+| `GET/POST /api/v1/properties`; `GET/POST /api/v1/properties/{propertyId}/units` | Imóveis e unidades |
+| `GET /api/v1/checklist-templates`; `GET /api/v1/checklist-templates/manage`; `POST /api/v1/checklist-templates`; `PUT /api/v1/checklist-templates/{templateId}` | Modelos de checklist |
+| `GET/POST /api/v1/inspections`; `POST /api/v1/inspections/from-template` | Listagem e criação de vistorias |
+| `GET /api/v1/inspections/{inspectionId}`; `PATCH /api/v1/inspections/{inspectionId}/schedule`; `POST /api/v1/inspections/{inspectionId}/complete`; `PATCH /api/v1/inspections/{inspectionId}/status` | Detalhes, agendamento, criação do job de laudo e transições de status |
+| `GET /api/v1/inspections/{inspectionId}/comparison` | Comparação entre vistorias relacionadas |
+| `POST /api/v1/items/{itemId}/evidence`; `GET /api/v1/evidence/{evidenceId}/download` | Envio e download de evidências |
+| `GET /api/v1/inspections/{inspectionId}/reports`; `GET /api/v1/reports/{reportId}/download` | Listagem e download de laudos |
+| `GET/POST /api/v1/inspections/{inspectionId}/acceptance` | Registrar ou consultar aceite da vistoria |
+| `GET /api/v1/team`; `POST /api/v1/team/invitations`; `DELETE /api/v1/team/invitations/{invitationId}`; `POST /api/v1/auth/invitations/accept` | Membros e convites |
+| `GET/PATCH /api/v1/organization`; `GET /health` | Configurações da organização e saúde dos serviços |
+
+### Banco de dados
+
+O PostgreSQL armazena organizações, usuários e contas, convites, imóveis, unidades, modelos de checklist, vistorias, ambientes, itens, metadados de evidências, laudos, jobs de laudo, aceites eletrônicos e eventos de auditoria.
+
+As tabelas multi-tenant incluem o identificador da organização. Migrations do EF Core criam o esquema e as políticas RLS. Os testes de integração usam PostgreSQL por meio do Testcontainers para exercitar isolamento entre organizações e privilégios da role de aplicação.
+
+### Executar localmente
+
+A forma mais direta de iniciar a stack local completa é com Docker Compose. No terminal, a partir da raiz do repositório:
+
+```powershell
+docker compose up --build
+```
+
+Acesse:
+
+- Aplicação web: [http://localhost:3000](http://localhost:3000)
+- Saúde da API: [http://localhost:8080/health](http://localhost:8080/health)
+- Gerenciamento do RabbitMQ: [http://localhost:15672](http://localhost:15672)
+- Console do RustFS: [http://localhost:9001](http://localhost:9001)
+
+O Compose fornece valores padrão de desenvolvimento. Para personalizá-los, copie `.env.example` para `.env` e edite os valores localmente. No ambiente Development, a API aplica as migrations automaticamente. Use `docker compose down` para encerrar os serviços; os volumes nomeados de dados são preservados.
+
+### Pré-requisitos
+
+- Docker Engine/Desktop com Docker Compose v2.
+- .NET SDK 10.0.400 para compilar ou testar o backend fora do Docker. A versão selecionada está registrada em `global.json`.
+- Node.js 24 e npm para instalar dependências ou compilar o frontend fora do Docker.
+
+### Variáveis de ambiente
+
+O modelo local está em `.env.example`. O Compose fornece valores padrão para desenvolvimento; defina estas variáveis em `.env` ao substituir serviços locais ou credenciais. Este README não contém valores de secrets.
+
+| Grupo de variáveis | Finalidade |
+| --- | --- |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT` | Container local do PostgreSQL |
+| `REDIS_PORT`, `RABBITMQ_PORT`, `RABBITMQ_MANAGEMENT_PORT`, `RABBITMQ_DEFAULT_USER`, `RABBITMQ_DEFAULT_PASS` | Serviços locais Redis e RabbitMQ |
+| `VISTORA_POSTGRES_CONNECTION`, `VISTORA_POSTGRES_MIGRATION_CONNECTION` | Conexões da aplicação e de migrations no ambiente Development |
+| `VISTORA_REDIS_CONNECTION`, `VISTORA_RABBITMQ_CONNECTION`, `VISTORA_RABBITMQ_QUEUE` | Conexões de cache e mensageria |
+| `VISTORA_STORAGE_S3_ENDPOINT`, `VISTORA_STORAGE_S3_REGION`, `VISTORA_STORAGE_S3_BUCKET`, `VISTORA_STORAGE_S3_ACCESS_KEY_ID`, `VISTORA_STORAGE_S3_SECRET_ACCESS_KEY`, `VISTORA_S3_ALLOW_INSECURE_LOCAL` | Armazenamento compatível com S3 |
+| `VISTORA_AUTHORITY`, `VISTORA_AUTH_AUDIENCE` | Validação opcional de JWT Bearer; o público é obrigatório quando há uma autoridade |
+| `ASPNETCORE_ENVIRONMENT` | Ambiente de execução da API e do Worker |
+| `VISTORA_API_URL` | Argumento de build Docker do frontend para o redirecionamento à API; o Compose define o endereço interno |
+
+A conexão de migrations é usada automaticamente apenas para migrations locais em Development. Para ambientes não locais, use credenciais administradas separadamente e configure um endpoint S3 privado com HTTPS. Não versione um arquivo `.env` preenchido nem envie credenciais de armazenamento ao navegador. O build Docker do frontend define `VISTORA_API_URL` com o endereço interno da API.
+
+### Instalação, build e testes
+
+Execute os comandos do backend a partir da raiz:
+
+```powershell
+dotnet restore backend/Vistora.slnx
+dotnet build backend/Vistora.slnx --no-restore --configuration Release
+dotnet test backend/Vistora.Tests/Vistora.Tests.csproj --no-restore --configuration Release
+```
+
+Compile o frontend a partir da pasta correspondente. No Windows PowerShell:
+
+```powershell
+Set-Location frontend
+npm.cmd ci
+npm.cmd test
+npm.cmd run build
+```
+
+No macOS ou Linux, use `npm ci` e `npm run build` dentro de `frontend/`. Os testes de integração PostgreSQL usam Testcontainers e precisam do Docker disponível.
+
+### Desafios e aprendizados
+
+- O isolamento por organização precisa acompanhar a requisição desde o contexto autenticado até o EF Core e a sessão PostgreSQL. A suíte de integração valida esse comportamento com PostgreSQL, pois um provider em memória não exercita RLS ou pooling de conexões.
+- A conclusão de uma vistoria inicia um processamento que pode durar mais que uma requisição HTTP. O estado persistido do job, a entrega RabbitMQ e a idempotência deixam esse fluxo explícito.
+- O armazenamento de arquivos traz preocupações de integridade além do upload. A API valida o conteúdo recebido e confere hashes SHA-256 ao servir arquivos protegidos.
+- As filas de retry e falha existem, mas ainda falta um procedimento operacional para inspecionar e reprocessar mensagens com falha.
+
+### Roadmap
+
+Os itens implementados abaixo podem ser verificados na API, no Worker, nos testes e na aplicação web. Os próximos passos correspondem a lacunas documentadas no projeto atual, sem datas de entrega comprometidas.
+
+**Concluído**
+
+- Contas por organização, autorização por perfil, convites de membros e configurações da organização.
+- Gestão de imóveis/unidades, modelos de checklist e vistorias de entrada/saída.
+- Agendamento, comparação de vistorias, envio de evidências e registros de aceite eletrônico.
+- Geração assíncrona de laudos PDF, armazenamento local compatível com S3 e publicação de imagens pela CI.
+
+**Próximos passos identificados**
+
+- Configurar envio de e-mails para convites e recuperação de conta.
+- Documentar um procedimento operacional para inspecionar e reprocessar mensagens com falha.
+- Definir como evidências WebP devem aparecer nos PDFs; a geração atual incorpora imagens JPEG/PNG, enquanto WebP continua acessível pela aplicação.
+- Escolher o destino de produção e definir procedimentos de implantação, backup, disponibilidade e desempenho.
+
+### Status do projeto
+
+**Em desenvolvimento.** O repositório inclui uma stack local executável via Compose e CI para build/testes do backend, build do frontend e validação do Compose. Pushes bem-sucedidos em `main` publicam imagens da API, do Worker e do frontend no GHCR; o workflow não faz deploy. As operações de produção e a disponibilidade ainda não foram validadas.
+
+### Autor
+
+**Rodrigo Tabaldi**
+
+Estudante de Engenharia de Software com foco em desenvolvimento Backend, .NET e aplicações Full Stack.
+
+GitHub: [Repositório Vistora](https://github.com/RodrigoTabaldi/VistoraSaas)
 
 ## Consistência e recuperação
 
@@ -82,3 +483,5 @@ As rotas de criação e conclusão exigem `Idempotency-Key` (até 200 caracteres
 Eventos de criação e aprovação usam outbox transacional. O Worker publica mensagens persistidas com confirmação do RabbitMQ. A entrega é pelo menos uma vez: consumidores devem tolerar o mesmo ID repetido se ocorrer uma queda entre publicar e registrar a confirmação. A conclusão grava um job durável de laudo; o scanner publica os pendentes, respeitando um intervalo de um minuto entre tentativas com falha. Jobs em processamento por mais de 30 minutos são recuperados. Jobs com falha final podem ser reenviados pelo administrador na tela da vistoria, com controle de concorrência.
 
 A migration `AddDurableOperations` cria tabelas com isolamento RLS para idempotência e outbox. Aplique migrations antes de atualizar a API em produção. Consulte `infra/OPERATIONS.md` para verificação, recuperação e limites de validação.
+
+A criação pelo endereço dispensa cadastro prévio de imóvel ou modelo, inclusive para Vistoriador. O checklist inicial pode receber novos ambientes e itens; a conclusão exige pelo menos um item e todos os itens verificados. Vistorias, agenda e laudos usam filtros e paginação no servidor, e os indicadores são agregados no PostgreSQL.
