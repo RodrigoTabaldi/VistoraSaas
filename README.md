@@ -21,6 +21,7 @@ dotnet build backend/Vistora.slnx --no-restore
 dotnet test backend/Vistora.Tests/Vistora.Tests.csproj --no-restore
 Set-Location frontend
 npm.cmd ci
+npm.cmd test
 npm.cmd run build
 ```
 
@@ -32,7 +33,7 @@ O cadastro cria a organização, o usuário administrador e as credenciais em tr
 
 ## Fluxo implementado
 
-O usuário cadastra imóveis e unidades, cria e edita modelos completos de checklist e abre vistorias de entrada ou saída. A vistoria copia ambientes e itens do modelo, registra respostas, observações e fotos, e pode receber data e hora em UTC. Uma saída é vinculada à entrada aprovada mais recente da mesma unidade, quando existe, e a interface compara respostas e observações. O Worker gera um PDF com dados do imóvel, respostas, observações e evidências JPEG/PNG. Evidências WebP são referenciadas no PDF e continuam acessíveis pela aplicação. O download de fotos, laudos e assinaturas passa por rotas autenticadas que conferem o SHA-256.
+Ao criar uma vistoria, o usuário pode informar o endereço na mesma tela, sem cadastrar previamente um imóvel. Imóvel e unidade são salvos junto com a vistoria; nome e complemento são opcionais. Um checklist inicial permite começar sem cadastrar um modelo, inclusive no perfil Vistoriador. A conclusão exige pelo menos um item e todos os itens verificados. Também é possível selecionar unidades existentes para preservar o histórico de entrada e saída. O usuário cadastra imóveis e unidades, cria e edita modelos completos de checklist e abre vistorias de entrada ou saída. A vistoria copia ambientes e itens do modelo, registra respostas, observações e fotos, e pode receber data e hora em UTC. Uma saída é vinculada à entrada aprovada mais recente da mesma unidade, quando existe, e a interface compara respostas e observações. O Worker gera um PDF com dados do imóvel, respostas, observações e evidências JPEG/PNG. Evidências WebP são referenciadas no PDF e continuam acessíveis pela aplicação. O download de fotos, laudos e assinaturas passa por rotas autenticadas que conferem o SHA-256.
 
 Administradores podem persistir os dados da organização, gerenciar membros e criar convites de uso único válidos por sete dias. A API guarda apenas o hash do token; como não há provedor de e-mail configurado, a interface oferece o link para cópia e envio manual. A vistoria concluída com relatório pode receber aceite eletrônico com imagem desenhada, usuário, data, versão dos termos e trilha de auditoria. A aprovação exige perfil administrador, relatório e aceite. Esse registro não é uma assinatura digital certificada. Após a conclusão, os dados do checklist não podem ser alterados pelos endpoints de edição.
 
@@ -73,3 +74,11 @@ backend/Vistora.Tests/          Testes unitários e integrados
 infra/                          Scripts operacionais
 docs/                           Documentação de produto
 ```
+
+## Consistência e recuperação
+
+As rotas de criação e conclusão exigem `Idempotency-Key` (até 200 caracteres). A mesma chave, operação e corpo recupera o resultado persistido, sem repetir a escrita. Reutilizar a chave com dados diferentes retorna conflito. O resultado e os dados de negócio ficam na mesma transação PostgreSQL, com um bloqueio liberado automaticamente no commit, rollback ou queda da conexão. As chaves anteriores que estavam somente no Redis não são migradas: finalize requisições em andamento antes da atualização.
+
+Eventos de criação e aprovação usam outbox transacional. O Worker publica mensagens persistidas com confirmação do RabbitMQ. A entrega é pelo menos uma vez: consumidores devem tolerar o mesmo ID repetido se ocorrer uma queda entre publicar e registrar a confirmação. A conclusão grava um job durável de laudo; o scanner publica os pendentes, respeitando um intervalo de um minuto entre tentativas com falha. Jobs em processamento por mais de 30 minutos são recuperados. Jobs com falha final podem ser reenviados pelo administrador na tela da vistoria, com controle de concorrência.
+
+A migration `AddDurableOperations` cria tabelas com isolamento RLS para idempotência e outbox. Aplique migrations antes de atualizar a API em produção. Consulte `infra/OPERATIONS.md` para verificação, recuperação e limites de validação.

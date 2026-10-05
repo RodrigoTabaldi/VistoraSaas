@@ -1,5 +1,6 @@
+using Vistora.Application.Idempotency;
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
-using Vistora.Application.Messaging;
 using Vistora.Application.Persistence;
 using Vistora.Domain;
 
@@ -7,7 +8,6 @@ namespace Vistora.Application.UseCases;
 
 public sealed class CompleteInspectionUseCase(
     IVistoraDbContext dbContext,
-    IReportJobPublisher publisher,
     ITenantContext tenantContext)
 {
     public async Task<CompleteInspectionResult> ExecuteAsync(
@@ -16,6 +16,7 @@ public sealed class CompleteInspectionUseCase(
         CancellationToken cancellationToken = default)
     {
         var inspection = await dbContext.Inspections
+            .Include(x => x.Rooms).ThenInclude(x => x.Items)
             .FirstOrDefaultAsync(x => x.Id == inspectionId, cancellationToken);
 
         if (inspection is null)
@@ -27,6 +28,10 @@ public sealed class CompleteInspectionUseCase(
         {
             return new CompleteInspectionResult.InvalidState();
         }
+
+        var items = inspection.Rooms.SelectMany(x => x.Items).ToList();
+        if (!InspectionWorkflow.CanComplete(items.Count, items.Count(x => InspectionWorkflow.IsAnswered(x.Response))))
+            return new CompleteInspectionResult.IncompleteChecklist();
 
         var existingJob = await dbContext.ReportJobs
             .FirstOrDefaultAsync(
@@ -58,18 +63,23 @@ public sealed class CompleteInspectionUseCase(
         dbContext.ReportJobs.Add(job);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        await publisher.PublishAsync(
-            new ReportJobMessage(job.Id, tenantContext.OrganizationId!.Value),
-            cancellationToken);
-
         return new CompleteInspectionResult.Created(job.Id);
     }
 }
 
-public abstract record CompleteInspectionResult
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "$result")]
+[JsonDerivedType(typeof(CompleteInspectionResult.Created), "Created")]
+[JsonDerivedType(typeof(CompleteInspectionResult.AlreadyInProgress), "AlreadyInProgress")]
+[JsonDerivedType(typeof(CompleteInspectionResult.NotFound), "NotFound")]
+[JsonDerivedType(typeof(CompleteInspectionResult.InvalidState), "InvalidState")]
+[JsonDerivedType(typeof(CompleteInspectionResult.IncompleteChecklist), "IncompleteChecklist")]
+public abstract record CompleteInspectionResult : IIdempotencyResult
 {
+    [JsonIgnore]
+    public bool IsSuccessful => this is Created or AlreadyInProgress;
     public sealed record Created(Guid ReportJobId) : CompleteInspectionResult;
     public sealed record AlreadyInProgress(Guid ExistingReportJobId) : CompleteInspectionResult;
     public sealed record NotFound : CompleteInspectionResult;
     public sealed record InvalidState : CompleteInspectionResult;
+    public sealed record IncompleteChecklist : CompleteInspectionResult;
 }

@@ -6,15 +6,12 @@ import { InspectionsTable } from './inspections-table';
 import { MetricCard, PageHeading, PanelHeader } from './dashboard-primitives';
 import { useInspections } from '../lib/inspection-store';
 
-function includesStatus(status: string, value: string) {
-  return status.toLowerCase().includes(value);
-}
-
 export function TriagesPage() {
-  const { inspections } = useInspections();
-  const pending = inspections.filter((item) => !includesStatus(item.status, 'conclu')).length;
-  const completed = inspections.filter((item) => includesStatus(item.status, 'conclu')).length;
-  const completionRate = inspections.length ? Math.round((completed / inspections.length) * 100) : 0;
+  const { statistics } = useInspections();
+  const total = statistics.reduce((sum, item) => sum + item.total, 0);
+  const completed = statistics.reduce((sum, item) => sum + item.completed, 0);
+  const pending = total - completed;
+  const completionRate = total ? Math.round(completed * 100 / total) : 0;
 
   return (
     <>
@@ -22,7 +19,7 @@ export function TriagesPage() {
       <div className="triage-page-actions"><Link className="button button--primary" href="/triagens/nova"><Icon name="plus" size={17} /> Nova triagem</Link></div>
 
       <section className="stats-grid stats-grid--three" aria-label="Indicadores de triagens">
-        <MetricCard icon="calendar" label="Vistorias registradas" value={String(inspections.length)} note="na organização" />
+        <MetricCard icon="calendar" label="Vistorias registradas" value={String(total)} note="na organização" />
         <MetricCard icon="file" label="Em execução" value={String(pending)} note="ainda não concluídas" tone="blue" />
         <MetricCard icon="check" label="Taxa de conclusão" value={`${completionRate}%`} note="de todas as vistorias" />
       </section>
@@ -35,7 +32,7 @@ export function TriagesPage() {
         <aside className="triage-side-panel panel">
           <div className="panel-header"><h2 className="panel-title">Fluxo da triagem</h2></div>
           <div className="triage-flow">
-            <div className="triage-flow-step triage-flow-step--active"><span>1</span><div><strong>Agendar</strong><small>Escolha imóvel, tipo e responsável.</small></div></div>
+            <div className="triage-flow-step triage-flow-step--active"><span>1</span><div><strong>Agendar</strong><small>Informe o endereço e o tipo. Agendamento opcional.</small></div></div>
             <div className="triage-flow-line" />
             <div className="triage-flow-step"><span>2</span><div><strong>Executar checklist</strong><small>Registre respostas, notas e evidências.</small></div></div>
             <div className="triage-flow-line" />

@@ -7,15 +7,15 @@ import { DonutChart, LegendRow, MetricCard, PageHeading, PanelHeader } from './d
 import { useInspections } from '../lib/inspection-store';
 
 export function AnalysisPage() {
-  const { inspections, error } = useInspections();
+  const { statistics, error } = useInspections();
   const [type, setType] = useState('Todos os tipos');
-  const filtered = inspections.filter((item) => type === 'Todos os tipos' || item.type === type);
-  const total = filtered.length;
-  const completed = filtered.filter((item) => item.status === 'Concluída').length;
+  const filtered = statistics.filter((item) => type === 'Todos os tipos' || item.type === (type === 'Entrada' ? 'MoveIn' : 'MoveOut'));
+  const total = filtered.reduce((sum, item) => sum + item.total, 0);
+  const completed = filtered.reduce((sum, item) => sum + item.completed, 0);
   const inProgress = total - completed;
-  const moveIns = filtered.filter((item) => item.type === 'Entrada').length;
-  const moveOuts = filtered.filter((item) => item.type === 'Saída').length;
-  const completionRate = total ? Math.round(completed / total * 100) : 0;
+  const completionRate = total ? Math.round(completed * 100 / total) : 0;
+  const moveIns = filtered.filter((item) => item.type === 'MoveIn').reduce((sum, item) => sum + item.total, 0);
+  const moveOuts = filtered.filter((item) => item.type === 'MoveOut').reduce((sum, item) => sum + item.total, 0);
 
   return <>
     <PageHeading title="Análises e indicadores" description="Indicadores calculados a partir das vistorias registradas na organização." />

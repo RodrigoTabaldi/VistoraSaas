@@ -36,6 +36,8 @@ public static class ApiEndpoints
 
         var inspections = api.MapGroup("/inspections");
         inspections.MapGet("", ListInspectionsAsync);
+        inspections.MapGet("/summary", ListInspectionSummariesAsync);
+        inspections.MapGet("/statistics", InspectionStatisticsAsync);
         inspections.MapPost("", CreateInspectionAsync).RequireAuthorization(AccessPolicies.EditInspection);
         inspections.MapGet("/{inspectionId:guid}", GetInspectionAsync);
         inspections.MapGet("/{inspectionId:guid}/comparison", CompareInspectionAsync);
@@ -44,6 +46,8 @@ public static class ApiEndpoints
         inspections.MapPost("/{inspectionId:guid}/rooms", CreateRoomAsync).RequireAuthorization(AccessPolicies.EditInspection);
         inspections.MapPost("/{inspectionId:guid}/reports", UploadReportAsync).RequireAuthorization(AccessPolicies.ManageOrganization);
         inspections.MapGet("/{inspectionId:guid}/reports", ListReportsAsync);
+        inspections.MapGet("/{inspectionId:guid}/report-jobs", ListReportJobsAsync);
+        inspections.MapPost("/{inspectionId:guid}/report-jobs/retry", RetryReportJobAsync).RequireAuthorization(AccessPolicies.ManageOrganization);
 
         var rooms = api.MapGroup("/rooms");
         rooms.MapPost("/{roomId:guid}/items", CreateItemAsync).RequireAuthorization(AccessPolicies.EditInspection);
@@ -54,6 +58,7 @@ public static class ApiEndpoints
 
         api.MapGet("/evidence/{evidenceId:guid}/download", DownloadEvidenceAsync);
         api.MapGet("/evidence/{evidenceId:guid}/content", ReadEvidenceAsync);
+        api.MapGet("/reports", ListAllReportsAsync);
         api.MapGet("/reports/{reportId:guid}/download", DownloadReportAsync);
         api.MapGet("/reports/{reportId:guid}/content", ReadReportAsync);
         return endpoints;
@@ -116,33 +121,73 @@ public static class ApiEndpoints
         return Results.Ok(inspections);
     }
 
+    private static async Task<IResult> ListInspectionSummariesAsync(
+        VistoraDbContext db, CancellationToken cancellationToken, int page = 1, int pageSize = 20, string? query = null, string? status = null, string? type = null, string? schedule = null, DateTimeOffset? from = null, DateTimeOffset? to = null)
+    {
+        if (page < 1 || page > 100000 || pageSize < 1 || pageSize > 100) return Validation("invalid pagination");
+        if (query?.Length > 200 || (from.HasValue && to.HasValue && from >= to)) return Validation("invalid filter");
+        from = from?.ToUniversalTime();
+        to = to?.ToUniversalTime();
+        var filtered = db.Inspections.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var term = query.Trim().ToLowerInvariant();
+            var idTerm = term.StartsWith("vis-") ? term[4..] : term;
+            filtered = filtered.Where(x => x.Unit!.Property!.Name.ToLower().Contains(term) || x.Unit.Property.Address.ToLower().Contains(term) || x.Unit.Identifier.ToLower().Contains(term) || x.Id.ToString().Contains(idTerm));
+        }
+        var now = DateTimeOffset.UtcNow;
+        switch (status)
+        {
+            case null: case "": break;
+            case "Concluída": filtered = filtered.Where(x => x.Status != InspectionStatus.Draft); break;
+            case "Em andamento": filtered = filtered.Where(x => x.Status == InspectionStatus.Draft && x.ScheduledAtUtc == null); break;
+            case "Agendada": filtered = filtered.Where(x => x.Status == InspectionStatus.Draft && x.ScheduledAtUtc >= now); break;
+            case "Atrasada": filtered = filtered.Where(x => x.Status == InspectionStatus.Draft && x.ScheduledAtUtc < now); break;
+            case "Draft": filtered = filtered.Where(x => x.Status == InspectionStatus.Draft); break;
+            default: return Validation("invalid status");
+        }
+        if (type is not null)
+        {
+            if (!Enum.TryParse<InspectionType>(type, out var inspectionType) || !Enum.IsDefined(inspectionType)) return Validation("invalid type");
+            filtered = filtered.Where(x => x.Type == inspectionType);
+        }
+        if (schedule == "scheduled") filtered = filtered.Where(x => x.ScheduledAtUtc != null);
+        else if (schedule == "unscheduled") filtered = filtered.Where(x => x.ScheduledAtUtc == null);
+        else if (schedule is not null) return Validation("invalid schedule filter");
+        if (from.HasValue) filtered = filtered.Where(x => x.ScheduledAtUtc >= from);
+        if (to.HasValue) filtered = filtered.Where(x => x.ScheduledAtUtc < to);
+        var total = await filtered.CountAsync(cancellationToken);
+        var ordered = schedule == "scheduled"
+            ? filtered.OrderBy(x => x.ScheduledAtUtc).ThenBy(x => x.Id)
+            : filtered.OrderByDescending(x => x.CreatedAtUtc).ThenBy(x => x.Id);
+        var items = await InspectionReadQueries.Summaries(ordered.Skip((page - 1) * pageSize).Take(pageSize)).ToListAsync(cancellationToken);
+        return Results.Ok(new { items, total, page, pageSize });
+    }
+
+    private static async Task<IResult> InspectionStatisticsAsync(VistoraDbContext db, CancellationToken cancellationToken)
+    {
+        var statistics = await InspectionReadQueries.Statistics(db.Inspections.AsNoTracking()).ToListAsync(cancellationToken);
+        return Results.Ok(statistics);
+    }
+
     private static async Task<IResult> CreateInspectionAsync(
-        InspectionRequest request, VistoraDbContext db, ITenantContext tenant, IMessageBus bus, CancellationToken cancellationToken)
+        InspectionRequest request, [Microsoft.AspNetCore.Mvc.FromServices] CreateInspectionFromTemplateUseCase useCase,
+        [Microsoft.AspNetCore.Mvc.FromServices] Vistora.Application.Idempotency.IdempotencyGuard guard,
+        [Microsoft.AspNetCore.Mvc.FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+        VistoraDbContext db, ITenantContext tenant, CancellationToken cancellationToken)
     {
         if (!HasTenant(tenant, out var organizationId)) return TenantRequired();
-        if (!Enum.IsDefined(request.Type)) return Validation("type must be MoveIn or MoveOut");
+        if (string.IsNullOrWhiteSpace(idempotencyKey) || idempotencyKey.Length > 200) return Validation("Idempotency-Key is required and must have at most 200 characters");
+        if (request.UnitId == Guid.Empty || !Enum.IsDefined(request.Type)) return Validation("unit and inspection type are required");
         if (!InspectionScheduleRules.IsValid(request.ScheduledAtUtc, DateTimeOffset.UtcNow)) return Validation("scheduledAtUtc must be in the future or null");
-        if (!await db.Units.AnyAsync(x => x.Id == request.UnitId, cancellationToken)) return Results.NotFound();
-        if (request.ChecklistTemplateId.HasValue && !await db.ChecklistTemplates.AnyAsync(x => x.Id == request.ChecklistTemplateId, cancellationToken)) return Results.NotFound();
-
-        var relatedInspectionId = request.Type == InspectionType.MoveOut
-            ? await db.Inspections
-                .Where(x => x.UnitId == request.UnitId && x.Type == InspectionType.MoveIn && x.Status == InspectionStatus.Approved)
-                .OrderByDescending(x => x.CompletedAtUtc)
-                .Select(x => (Guid?)x.Id)
-                .FirstOrDefaultAsync(cancellationToken)
-            : null;
-
-        var inspection = new Inspection
-        {
-            Id = Guid.NewGuid(), UnitId = request.UnitId, ChecklistTemplateId = request.ChecklistTemplateId,
-            RelatedInspectionId = relatedInspectionId,
-            Type = request.Type, Status = InspectionStatus.Draft, OrganizationId = organizationId, CreatedAtUtc = DateTimeOffset.UtcNow,
-            ScheduledAtUtc = InspectionScheduleRules.Normalize(request.ScheduledAtUtc)
-        };
-        db.Inspections.Add(inspection);
-        await db.SaveChangesAsync(cancellationToken);
-        await PublishAsync(bus, "inspection.created", inspection.Id, organizationId, cancellationToken);
+        var outcome = await guard.ExecuteAsync(organizationId, idempotencyKey,
+            () => useCase.ExecuteAsync(request.UnitId, request.ChecklistTemplateId ?? Guid.Empty,
+                request.Type, cancellationToken, request.ScheduledAtUtc),
+            cancellationToken, "inspection.create", System.Text.Json.JsonSerializer.Serialize(request));
+        if (outcome.Kind == Vistora.Application.Idempotency.IdempotencyResultKind.Conflict)
+            return Results.Conflict(new { error = "Operation is in progress or the key was reused with different data." });
+        if (outcome.Result is not CreateInspectionResult.Created created) return Results.NotFound();
+        var inspection = await db.Inspections.SingleAsync(x => x.Id == created.InspectionId, cancellationToken);
         return Results.Created($"/api/v1/inspections/{inspection.Id}",
             new InspectionResponse(inspection.Id, inspection.UnitId, inspection.Type, inspection.Status, inspection.CreatedAtUtc, inspection.ScheduledAtUtc, null, inspection.RowVersion));
     }
@@ -150,6 +195,7 @@ public static class ApiEndpoints
     private static async Task<IResult> GetInspectionAsync(Guid inspectionId, VistoraDbContext db, CancellationToken cancellationToken)
     {
         var inspection = await db.Inspections.AsNoTracking().Include(x => x.Acceptance)
+            .Include(x => x.Unit).ThenInclude(x => x!.Property)
             .Include(x => x.Rooms).ThenInclude(x => x.Items).ThenInclude(x => x.Evidence)
             .SingleOrDefaultAsync(x => x.Id == inspectionId, cancellationToken);
         if (inspection is null) return Results.NotFound();
@@ -158,6 +204,9 @@ public static class ApiEndpoints
         {
             inspection.Id, inspection.UnitId, inspection.Type, inspection.Status, inspection.CreatedAtUtc, inspection.ScheduledAtUtc, inspection.CompletedAtUtc,
             inspection.RelatedInspectionId,
+            PropertyName = inspection.Unit!.Property!.Name,
+            Address = inspection.Unit.Property.Address,
+            UnitIdentifier = inspection.Unit.Identifier,
             inspection.RowVersion,
             Acceptance = inspection.Acceptance == null ? null : new
             {
@@ -181,7 +230,6 @@ public static class ApiEndpoints
         StatusRequest request,
         VistoraDbContext db,
         ITenantContext tenant,
-        IMessageBus bus,
         CancellationToken cancellationToken)
     {
         if (!HasTenant(tenant, out var organizationId)) return TenantRequired();
@@ -209,8 +257,13 @@ public static class ApiEndpoints
         });
         try
         {
+            db.OutboxMessages.Add(new OutboxMessage
+            {
+                Id = Guid.NewGuid(), OrganizationId = organizationId, Type = "inspection.approved",
+                Payload = System.Text.Json.JsonSerializer.Serialize(new { organizationId, entityId = inspection.Id }),
+                CreatedAtUtc = DateTimeOffset.UtcNow
+            });
             await db.SaveChangesAsync(cancellationToken);
-            await PublishAsync(bus, $"inspection.{request.Status.ToString().ToLowerInvariant()}", inspection.Id, organizationId, cancellationToken);
             return Results.Ok(new { inspection.Id, inspection.Status, inspection.CompletedAtUtc, inspection.RowVersion });
         }
         catch (DbUpdateConcurrencyException)
@@ -247,7 +300,7 @@ public static class ApiEndpoints
 
     private static async Task<IResult> UpdateItemAsync(Guid itemId, UpdateItemRequest request, VistoraDbContext db, CancellationToken cancellationToken)
     {
-        if (request.Response?.Length > 2000 || request.Notes?.Length > 4000 || request.RowVersion == 0) return Validation("response, notes or rowVersion are invalid");
+        if (!InspectionWorkflow.IsValidResponse(request.Response) || request.Response?.Length > 2000 || request.Notes?.Length > 4000 || request.RowVersion == 0) return Validation("response, notes or rowVersion are invalid");
         var item = await db.InspectionItems.Include(x => x.Room).ThenInclude(x => x!.Inspection)
             .SingleOrDefaultAsync(x => x.Id == itemId, cancellationToken);
         if (item is null) return Results.NotFound();
@@ -439,14 +492,62 @@ public static class ApiEndpoints
         return Results.Ok(reports);
     }
 
+    private static async Task<IResult> ListAllReportsAsync(VistoraDbContext db, CancellationToken cancellationToken,
+        int page = 1, int pageSize = 20, string? query = null)
+    {
+        if (page < 1 || page > 100000 || pageSize < 1 || pageSize > 100 || query?.Length > 200) return Validation("invalid pagination or query");
+        var filtered = db.Reports.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var term = query.Trim().ToLowerInvariant();
+            var idTerm = term.StartsWith("vis-") ? term[4..] : term;
+            filtered = filtered.Where(x => x.Inspection!.Unit!.Property!.Name.ToLower().Contains(term) || x.InspectionId.ToString().Contains(idTerm));
+        }
+        var total = await filtered.CountAsync(cancellationToken);
+        var items = await filtered.OrderByDescending(x => x.CreatedAtUtc).ThenBy(x => x.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(x => new { x.Id, x.InspectionId, x.Version, x.CreatedAtUtc, PropertyName = x.Inspection!.Unit!.Property!.Name })
+            .ToListAsync(cancellationToken);
+        return Results.Ok(new { items, total });
+    }
+
+    private static async Task<IResult> ListReportJobsAsync(Guid inspectionId, VistoraDbContext db, CancellationToken cancellationToken)
+    {
+        if (!await db.Inspections.AnyAsync(x => x.Id == inspectionId, cancellationToken)) return Results.NotFound();
+        return Results.Ok(await db.ReportJobs.AsNoTracking().Where(x => x.InspectionId == inspectionId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Select(x => new { x.Id, x.Status, x.Attempts, x.MaxAttempts, x.RowVersion }).ToListAsync(cancellationToken));
+    }
+
+    private static async Task<IResult> RetryReportJobAsync(Guid inspectionId, RetryReportRequest request, VistoraDbContext db, CancellationToken cancellationToken)
+    {
+        if (request.RowVersion == 0) return Validation("rowVersion is required");
+        var job = await db.ReportJobs.SingleOrDefaultAsync(x => x.Id == request.ReportJobId && x.InspectionId == inspectionId, cancellationToken);
+        if (job is null) return Results.NotFound();
+        if (job.Status != ReportJobStatus.Failed) return Results.Conflict(new { error = "Only failed report jobs can be retried." });
+        db.Entry(job).Property(x => x.RowVersion).OriginalValue = request.RowVersion;
+        job.Status = ReportJobStatus.Pending;
+        job.Attempts = 0;
+        job.StartedAtUtc = null;
+        job.CompletedAtUtc = null;
+        job.ErrorMessage = null;
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return Results.Accepted($"/api/v1/inspections/{inspectionId}/report-jobs", new { job.Id, job.Status });
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new { error = "The job was modified by another request.", code = "concurrency_conflict" });
+        }
+    }
+
     private static bool HasTenant(ITenantContext tenant, out Guid organizationId)
     { organizationId = tenant.OrganizationId ?? Guid.Empty; return organizationId != Guid.Empty; }
 
     private static IResult TenantRequired() => Results.Problem("A valid organization tenant is required.", statusCode: StatusCodes.Status401Unauthorized);
     private static IResult Validation(string message) => Results.ValidationProblem(new Dictionary<string, string[]> { ["request"] = [message] });
     private static bool ValidText(string? value, int max) => !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= max;
-    private static Task PublishAsync(IMessageBus bus, string type, Guid entityId, Guid organizationId, CancellationToken cancellationToken) =>
-        bus.PublishAsync(new MessageEnvelope(Guid.NewGuid(), type, $"{{\"organizationId\":\"{organizationId}\",\"entityId\":\"{entityId}\"}}", DateTimeOffset.UtcNow), cancellationToken);
     private static async Task<string> ComputeHashAsync(Stream stream, CancellationToken cancellationToken)
     { if (stream.CanSeek) stream.Position = 0; return Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken)).ToLowerInvariant(); }
 
@@ -457,6 +558,7 @@ public static class ApiEndpoints
     public sealed record ItemRequest(string Description, int Position);
     public sealed record UpdateItemRequest(string? Response, string? Notes, uint RowVersion);
     public sealed record StatusRequest(InspectionStatus Status, uint RowVersion);
+    public sealed record RetryReportRequest(Guid ReportJobId, uint RowVersion);
     public sealed record ScheduleRequest(DateTimeOffset? ScheduledAtUtc);
     private sealed record PropertyResponse(Guid Id, string Name, string Address, DateTimeOffset CreatedAtUtc);
     private sealed record UnitResponse(Guid Id, Guid PropertyId, string Identifier);

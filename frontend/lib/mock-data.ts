@@ -15,6 +15,8 @@ export type InspectionRow = {
   scheduledAtUtc?: string | null;
   status: InspectionStatus;
   progress: number;
+  createdAtUtc?: string;
+  hasReport?: boolean;
 };
 
 export const inspections: InspectionRow[] = [

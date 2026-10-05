@@ -69,8 +69,7 @@ using Amazon.S3;
               throw new InvalidOperationException("ConnectionStrings:Redis must be configured.");
           }
 
-          services.AddSingleton<IIdempotencyStore, RedisIdempotencyStore>();
-          services.AddScoped<IdempotencyGuard>();
+          services.AddScoped<IdempotencyGuard, PostgreSqlIdempotencyGuard>();
 
           var rabbitConnectionString = configuration.GetConnectionString("RabbitMq");
           if (string.IsNullOrWhiteSpace(rabbitConnectionString))

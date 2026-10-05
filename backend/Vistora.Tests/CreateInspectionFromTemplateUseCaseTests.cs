@@ -98,6 +98,72 @@ public sealed class CreateInspectionFromTemplateUseCaseTests
         Assert.Equal(latest.Id, inspection.RelatedInspectionId);
     }
 
+    [Fact]
+    public async Task Address_creates_property_unit_and_inspection_together()
+    {
+        var organizationId = Guid.NewGuid();
+        await using var db = CreateContext(organizationId);
+        var template = new ChecklistTemplate { Id = Guid.NewGuid(), OrganizationId = organizationId,
+            Name = "Basic", IsActive = true };
+        db.ChecklistTemplates.Add(template);
+        await db.SaveChangesAsync();
+        var result = await new CreateInspectionFromTemplateUseCase(db, new TestTenantContext(organizationId))
+            .ExecuteAsync(Guid.Empty, template.Id, InspectionType.MoveIn,
+                location: new QuickInspectionLocation("  Rua A, 10  "));
+        var created = Assert.IsType<CreateInspectionResult.Created>(result);
+        var property = Assert.Single(await db.Properties.ToListAsync());
+        Assert.Equal("Rua A, 10", property.Address);
+        Assert.Equal(property.Address, property.Name);
+        Assert.Equal(organizationId, property.OrganizationId);
+        var unit = Assert.Single(await db.Units.ToListAsync());
+        Assert.Equal("Principal", unit.Identifier);
+        Assert.Equal(property.Id, unit.PropertyId);
+        Assert.Equal(unit.Id, (await db.Inspections.SingleAsync(x => x.Id == created.InspectionId)).UnitId);
+    }
+
+    [Fact]
+    public async Task Missing_template_does_not_create_a_property_or_unit()
+    {
+        var organizationId = Guid.NewGuid();
+        await using var db = CreateContext(organizationId);
+        var result = await new CreateInspectionFromTemplateUseCase(db, new TestTenantContext(organizationId))
+            .ExecuteAsync(Guid.Empty, Guid.NewGuid(), InspectionType.MoveIn,
+                location: new QuickInspectionLocation("Rua A, 10"));
+        Assert.IsType<CreateInspectionResult.TemplateNotFound>(result);
+        Assert.Empty(await db.Properties.ToListAsync());
+        Assert.Empty(await db.Units.ToListAsync());
+        Assert.Empty(await db.Inspections.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Empty_address_is_rejected_without_writes(string address)
+    {
+        var organizationId = Guid.NewGuid();
+        await using var db = CreateContext(organizationId);
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            new CreateInspectionFromTemplateUseCase(db, new TestTenantContext(organizationId))
+                .ExecuteAsync(Guid.Empty, Guid.NewGuid(), InspectionType.MoveIn,
+                    location: new QuickInspectionLocation(address)));
+        Assert.Empty(await db.Properties.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Initial_checklist_does_not_require_an_existing_property_or_template()
+    {
+        var organizationId = Guid.NewGuid();
+        await using var db = CreateContext(organizationId);
+        var result = await new CreateInspectionFromTemplateUseCase(db, new TestTenantContext(organizationId))
+            .ExecuteAsync(Guid.Empty, Guid.Empty, InspectionType.MoveIn, location: new QuickInspectionLocation("Street, 10"));
+        var created = Assert.IsType<CreateInspectionResult.Created>(result);
+        var inspection = await db.Inspections.Include(x => x.Rooms).ThenInclude(x => x.Items).SingleAsync(x => x.Id == created.InspectionId);
+        Assert.Null(inspection.ChecklistTemplateId);
+        Assert.Single(Assert.Single(inspection.Rooms).Items);
+        Assert.Empty(await db.ChecklistTemplates.ToListAsync());
+        Assert.Equal("inspection.created", Assert.Single(await db.OutboxMessages.ToListAsync()).Type);
+    }
+
     private static VistoraDbContext CreateContext(Guid organizationId)
     {
         var options = new DbContextOptionsBuilder<VistoraDbContext>()

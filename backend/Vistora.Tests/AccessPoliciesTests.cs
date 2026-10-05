@@ -36,6 +36,7 @@ public sealed class AccessPoliciesTests
     [InlineData("POST", "/api/v1/inspections", AccessPolicies.EditInspection)]
     [InlineData("PATCH", "/api/v1/inspections/{inspectionId:guid}/status", AccessPolicies.ManageOrganization)]
     [InlineData("POST", "/api/v1/items/{itemId:guid}/evidence", AccessPolicies.EditInspection)]
+    [InlineData("POST", "/api/v1/inspections/{inspectionId:guid}/report-jobs/retry", AccessPolicies.ManageOrganization)]
     public void WriteRoutesRequireTheExpectedPolicy(string method, string path, string expectedPolicy)
     {
         var builder = WebApplication.CreateBuilder();

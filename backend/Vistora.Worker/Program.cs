@@ -15,6 +15,7 @@ builder.Services.AddHealthChecks().AddCheck<WorkerReadinessHealthCheck>("worker_
 builder.Services.AddHostedService<HealthCheckStartupService>();
 builder.Services.AddHostedService<Worker>();
 builder.Services.AddHostedService<ReportJobConsumer>();
+builder.Services.AddHostedService<OutboxDispatcher>();
 builder.Services.AddHostedService<ReportJobRetryScanner>();
 builder.Services.AddHostedService<MessageConsumerWorker>();
 

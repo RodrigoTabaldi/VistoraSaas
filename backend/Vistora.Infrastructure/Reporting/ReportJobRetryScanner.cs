@@ -14,7 +14,7 @@ public sealed class ReportJobRetryScanner(
     IReportJobPublisher publisher,
     ILogger<ReportJobRetryScanner> logger) : BackgroundService
 {
-    private static readonly TimeSpan ScanInterval = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan ScanInterval = TimeSpan.FromSeconds(5);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -57,8 +57,10 @@ public sealed class ReportJobRetryScanner(
                         if (stalledJobs.Count > 0)
                             await orgDbContext.SaveChangesAsync(stoppingToken);
 
+                        var retryBefore = DateTimeOffset.UtcNow.AddMinutes(-1);
                         var pendingRetryJobs = await orgDbContext.ReportJobs
-                            .Where(j => j.Status == ReportJobStatus.Pending)
+                            .Where(j => j.Status == ReportJobStatus.Pending && (j.Attempts == 0 || j.StartedAtUtc < retryBefore))
+                            .OrderBy(j => j.CreatedAtUtc).Take(100)
                             .ToListAsync(stoppingToken);
 
                         foreach (var job in pendingRetryJobs)

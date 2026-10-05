@@ -5,6 +5,7 @@ namespace Vistora.Application.Persistence;
 
 public interface IVistoraDbContext
 {
+    DbSet<OutboxMessage> OutboxMessages { get; }
     DbSet<Organization> Organizations { get; }
     DbSet<Unit> Units { get; }
     DbSet<ChecklistTemplate> ChecklistTemplates { get; }

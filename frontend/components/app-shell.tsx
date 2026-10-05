@@ -10,7 +10,7 @@ import { InspectionProvider } from '../lib/inspection-store';
 
 const navigation: Array<{ href: string; label: string; icon: IconName }> = [
   { href: '/dashboard', label: 'Home', icon: 'home' },
-  { href: '/triagens', label: 'Triagens', icon: 'clipboard' },
+  { href: '/vistorias', label: 'Vistorias', icon: 'clipboard' },
   { href: '/imoveis', label: 'Imóveis', icon: 'building' },
   { href: '/agenda', label: 'Agenda', icon: 'calendar' },
   { href: '/relatorios', label: 'Relatórios', icon: 'chart' },
@@ -92,7 +92,7 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
         </div>
         <nav className="sidebar-nav" aria-label="Navegação principal">
           {navigation.filter((item) => !['/equipe', '/modelos-checklist'].includes(item.href) || currentUser.role === 'Admin').map((item) => {
-            const isActive = item.href === '/dashboard' ? pathname === item.href : pathname.startsWith(item.href);
+            const isActive = item.href === '/dashboard' ? pathname === item.href : pathname.startsWith(item.href) || (item.href === '/vistorias' && pathname.startsWith('/triagens'));
             return (
               <Link key={item.href} className="sidebar-nav-link" href={item.href} aria-current={isActive ? 'page' : undefined} onClick={() => setSidebarOpen(false)}>
                 <Icon name={item.icon} size={20} />

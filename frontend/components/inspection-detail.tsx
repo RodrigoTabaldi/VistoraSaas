@@ -17,9 +17,11 @@ type InspectionItem = {
 type InspectionRoom = { id: string; name: string; position: number; items: InspectionItem[] };
 type Inspection = {
   id: string; unitId: string; type: 'MoveIn' | 'MoveOut'; status: 'Draft' | 'Completed' | 'Approved';
+  propertyName: string; address: string; unitIdentifier: string;
   rowVersion: number; createdAtUtc: string; scheduledAtUtc: string | null; rooms: InspectionRoom[];
   acceptance: Acceptance | null;
 };
+type ReportJob = { id: string; status: 'Pending' | 'Processing' | 'Completed' | 'Failed'; attempts: number; maxAttempts: number; rowVersion: number };
 type Report = { id: string; version: number; createdAtUtc: string; approvedAtUtc: string | null };
 type Acceptance = { id: string; signerName: string; signerEmail: string; acceptedAtUtc: string; termsVersion: string };
 type Download = { url: string };
@@ -43,7 +45,9 @@ export function InspectionDetail({ inspectionId }: Readonly<{ inspectionId: stri
   const role = useCurrentUser().role;
   const { getInspection, completeInspection, refresh: refreshInspections, error: storeError } = useInspections();
   const summary = getInspection(inspectionId);
+  const [dirtyItems, setDirtyItems] = useState(new Set<string>());
   const [inspection, setInspection] = useState<Inspection | null>(null);
+  const [reportJob, setReportJob] = useState<ReportJob | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
   const [comparison, setComparison] = useState<Comparison | null>(null);
   const [comparisonError, setComparisonError] = useState('');
@@ -56,14 +60,17 @@ export function InspectionDetail({ inspectionId }: Readonly<{ inspectionId: stri
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    const [detail, reportList] = await Promise.all([
+    const [detail, reportList, jobs] = await Promise.all([
       apiRequest<Inspection>(`/api/v1/inspections/${inspectionId}`),
       apiRequest<Report[]>(`/api/v1/inspections/${inspectionId}/reports`),
+      apiRequest<ReportJob[]>(`/api/v1/inspections/${inspectionId}/report-jobs`),
     ]);
     setSignaturePreviewUrl('');
     setInspection(detail);
+    setDirtyItems(new Set());
     setScheduledAtLocal(toLocalDateTime(detail.scheduledAtUtc));
     setReports(reportList);
+    setReportJob(jobs[0] ?? null);
     if (detail.type === 'MoveOut') {
       try {
         setComparison(await apiRequest<Comparison>(`/api/v1/inspections/${inspectionId}/comparison`));
@@ -88,26 +95,52 @@ export function InspectionDetail({ inspectionId }: Readonly<{ inspectionId: stri
     if (signaturePreviewUrl) URL.revokeObjectURL(signaturePreviewUrl);
   }, [signaturePreviewUrl]);
 
+  useEffect(() => {
+    if (inspection?.status !== 'Completed' || reports.length || !reportJob || !['Pending', 'Processing'].includes(reportJob.status)) return;
+    const timer = window.setInterval(() => { void refresh().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : 'Falha ao atualizar o laudo.')); }, 5000);
+    return () => window.clearInterval(timer);
+  }, [inspection?.status, reports.length, reportJob?.status, refresh]);
+
+  async function retryReport() {
+    if (!reportJob) return;
+    setBusy('retry');
+    setError('');
+    try {
+      await apiRequest(`/api/v1/inspections/${inspectionId}/report-jobs/retry`, {
+        method: 'POST', body: JSON.stringify({ reportJobId: reportJob.id, rowVersion: reportJob.rowVersion }),
+      });
+      await refresh();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Falha ao reenviar o laudo.'); }
+    finally { setBusy(''); }
+  }
+
   function editItem(itemId: string, field: 'response' | 'notes', value: string) {
+    setDirtyItems((current) => new Set(current).add(itemId));
     setInspection((current) => current && ({ ...current, rooms: current.rooms.map((room) => ({
       ...room, items: room.items.map((item) => item.id === itemId ? { ...item, [field]: value } : item),
     })) }));
+  }
+
+  async function persistItem(item: InspectionItem) {
+    const saved = await apiRequest<{ rowVersion: number }>(`/api/v1/items/${item.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ response: item.response, notes: item.notes, rowVersion: item.rowVersion }),
+    });
+    setInspection((current) => current && ({ ...current, rooms: current.rooms.map((room) => ({
+      ...room, items: room.items.map((existing) => existing.id === item.id ? { ...existing, rowVersion: saved.rowVersion } : existing),
+    })) }));
+    setDirtyItems((current) => { const next = new Set(current); next.delete(item.id); return next; });
   }
 
   async function saveItem(item: InspectionItem) {
     setBusy(item.id);
     setError('');
     try {
-      await apiRequest(`/api/v1/items/${item.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ response: item.response, notes: item.notes, rowVersion: item.rowVersion }),
-      });
-      await refresh();
+      await persistItem(item);
+      await refreshInspections();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível salvar o item.');
-    } finally {
-      setBusy('');
-    }
+    } finally { setBusy(''); }
   }
 
   async function addRoom(event: React.FormEvent<HTMLFormElement>) {
@@ -224,10 +257,16 @@ export function InspectionDetail({ inspectionId }: Readonly<{ inspectionId: stri
   }
 
   async function finishInspection() {
+    if (!inspection) return;
     setBusy('complete');
-    await completeInspection(inspectionId);
-    try { await refresh(); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível atualizar a vistoria.'); }
+    setError('');
+    try {
+      for (const item of inspection.rooms.flatMap((room) => room.items)) {
+        if (dirtyItems.has(item.id)) await persistItem(item);
+      }
+      if (!(await completeInspection(inspectionId))) return;
+      await refresh();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar e concluir a vistoria.'); }
     finally { setBusy(''); }
   }
 
@@ -260,7 +299,7 @@ export function InspectionDetail({ inspectionId }: Readonly<{ inspectionId: stri
 
   return <>
     <div className="breadcrumb"><Link href="/vistorias">Vistorias</Link><Icon name="chevronRight" size={13} /><strong>{summary?.code ?? inspection.id.slice(0, 8)}</strong></div>
-    <PageHeading title={summary?.property ?? 'Vistoria'} description={`${inspection.type === 'MoveIn' ? 'Entrada' : 'Saída'} · ${summary?.city ?? ''}`} />
+    <PageHeading title={summary?.property ?? inspection.propertyName} description={`${inspection.type === 'MoveIn' ? 'Entrada' : 'Saída'} · ${summary?.city ?? [inspection.address, inspection.unitIdentifier].filter(Boolean).join(' · ')}`} />
     <div className="page-actions"><StatusBadge status={inspection.status === 'Approved' ? 'Aprovada' : inspection.status === 'Completed' ? 'Concluída' : 'Em andamento'} /><span>{answeredItems} de {totalItems} itens verificados ({progress}%)</span></div>
     {(error || storeError) && <p className="form-feedback form-feedback--error" role="alert">{error || storeError}</p>}
     {!readOnly && <form className="panel compact-form schedule-editor" onSubmit={saveSchedule}>
@@ -284,6 +323,9 @@ export function InspectionDetail({ inspectionId }: Readonly<{ inspectionId: stri
     {inspection.type === 'MoveOut' && <section className="panel compact-form"><h2>Comparação com a entrada</h2>{comparison ? <><p><Link href={`/vistorias/${comparison.moveInInspectionId}`}>Abrir vistoria de entrada aprovada</Link></p><div className="room-list">{comparison.differences.map((difference, index) => <article className="room-card" key={`${difference.room}-${difference.item}-${index}`}><div className="panel-body"><strong>{difference.room} · {difference.item}</strong><p>Entrada: {difference.moveInResponse ?? 'Não registrado'}{difference.moveInNotes ? ` — ${difference.moveInNotes}` : ''}</p><p>Saída: {difference.moveOutResponse ?? 'Não registrado'}{difference.moveOutNotes ? ` — ${difference.moveOutNotes}` : ''}</p><StatusBadge status={difference.changed ? 'Alterado' : 'Sem alteração'} /></div></article>)}</div></> : <p>{comparisonError || 'Nenhuma vistoria de entrada aprovada foi encontrada para esta unidade.'}</p>}</section>}
     {inspection.acceptance && <section className="panel compact-form acceptance-panel"><h2>Aceite registrado</h2><p>Confirmado por <strong>{inspection.acceptance.signerName}</strong> ({inspection.acceptance.signerEmail}) em {new Date(inspection.acceptance.acceptedAtUtc).toLocaleString('pt-BR')}.</p><p className="panel-caption">Versão do termo: {inspection.acceptance.termsVersion}</p><button className="button button--outline" type="button" onClick={loadSignaturePreview}>Ver assinatura</button>{signaturePreviewUrl && <img className="signature-preview" src={signaturePreviewUrl} alt={`Assinatura de ${inspection.acceptance.signerName}`} />}</section>}
     {canAccept && <SignatureCapture onSave={saveAcceptance} saving={busy === 'acceptance'} />}
-    <div className="detail-actions"><Link className="button button--outline" href="/vistorias">Voltar</Link>{!readOnly && <button className="button button--primary" type="button" disabled={Boolean(busy)} onClick={finishInspection}><Icon name="check" size={17} /> Concluir vistoria</button>}{inspection.status === 'Completed' && !inspection.acceptance && role === 'Admin' && <span className="panel-caption">Registre o aceite antes de aprovar.</span>}{canApprove && <button className="button button--primary" type="button" disabled={Boolean(busy)} onClick={approveInspection}><Icon name="check" size={17} /> Aprovar vistoria</button>}</div>
+    {!readOnly && (totalItems === 0 || answeredItems !== totalItems) && <p className="panel-caption">Verifique todos os itens para concluir. As alterações pendentes serão salvas ao concluir.</p>}
+    {inspection.status === 'Completed' && !reports.length && reportJob && <p role="status">{reportJob.status === 'Failed' ? 'A geração do laudo falhou. Um administrador pode tentar novamente.' : 'O laudo está sendo preparado. Esta tela será atualizada automaticamente.'}</p>}
+    {reportJob?.status === 'Failed' && role === 'Admin' && <button className="button button--outline" type="button" disabled={Boolean(busy)} onClick={retryReport}>Tentar gerar laudo novamente</button>}
+    <div className="detail-actions"><Link className="button button--outline" href="/vistorias">Voltar</Link>{!readOnly && <button className="button button--primary" type="button" disabled={Boolean(busy) || totalItems === 0 || answeredItems !== totalItems} onClick={finishInspection}><Icon name="check" size={17} /> {dirtyItems.size ? 'Salvar e concluir' : 'Concluir vistoria'}</button>}{inspection.status === 'Completed' && !inspection.acceptance && role === 'Admin' && <span className="panel-caption">Registre o aceite antes de aprovar.</span>}{canApprove && <button className="button button--primary" type="button" disabled={Boolean(busy)} onClick={approveInspection}><Icon name="check" size={17} /> Aprovar vistoria</button>}</div>
   </>;
 }

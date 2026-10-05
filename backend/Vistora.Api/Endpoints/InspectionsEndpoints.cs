@@ -28,6 +28,9 @@ public static class InspectionsEndpoints
         [FromServices] ITenantContext tenantContext,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(idempotencyKeyHeader) || idempotencyKeyHeader.Length > 200)
+            return Results.BadRequest(new { error = "Idempotency-Key is required and must have at most 200 characters." });
+
         if (tenantContext.OrganizationId is not { } organizationId)
         {
             return Results.BadRequest(new { error = "Organization context is missing." });
@@ -37,7 +40,7 @@ public static class InspectionsEndpoints
             organizationId,
             idempotencyKeyHeader,
             async () => await useCase.ExecuteAsync(inspectionId, idempotencyKeyHeader ?? string.Empty, cancellationToken),
-            cancellationToken);
+            cancellationToken, "inspection.complete", inspectionId.ToString());
 
         if (outcome.Kind == IdempotencyResultKind.Conflict)
         {
@@ -54,6 +57,9 @@ public static class InspectionsEndpoints
 
             CompleteInspectionResult.NotFound =>
                 Results.NotFound(new { error = $"Inspection '{inspectionId}' was not found." }),
+
+            CompleteInspectionResult.IncompleteChecklist =>
+                Results.Conflict(new { error = "Verifique todos os itens do checklist antes de concluir a vistoria.", code = "incomplete_checklist" }),
 
             CompleteInspectionResult.InvalidState =>
                 Results.Conflict(new { error = "Inspection cannot be completed because its current status is not eligible." }),

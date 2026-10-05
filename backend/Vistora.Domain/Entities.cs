@@ -272,3 +272,23 @@ public sealed class ChecklistTemplateItem : IOrganizationScoped, IRowVersioned
 }
 
 
+
+public sealed class IdempotencyRecord : IOrganizationScoped
+{
+    public Guid Id { get; set; }
+    public Guid OrganizationId { get; set; }
+    public required string KeyHash { get; set; }
+    public required string RequestHash { get; set; }
+    public required string ResultJson { get; set; }
+    public DateTimeOffset CreatedAtUtc { get; set; }
+}
+
+public sealed class OutboxMessage : IOrganizationScoped
+{
+    public Guid Id { get; set; }
+    public Guid OrganizationId { get; set; }
+    public required string Type { get; set; }
+    public required string Payload { get; set; }
+    public DateTimeOffset CreatedAtUtc { get; set; }
+    public DateTimeOffset? PublishedAtUtc { get; set; }
+}

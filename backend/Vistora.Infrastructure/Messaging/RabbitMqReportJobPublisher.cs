@@ -12,7 +12,7 @@ public sealed class RabbitMqReportJobPublisher(IConnectionFactory connectionFact
     public async Task PublishAsync(ReportJobMessage message, CancellationToken cancellationToken = default)
     {
         var connection = await GetConnectionAsync(cancellationToken);
-        await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
+        await using var channel = await connection.CreateChannelAsync(new CreateChannelOptions(publisherConfirmationsEnabled: true, publisherConfirmationTrackingEnabled: true), cancellationToken);
         await RabbitMqReportJobTopology.DeclareAsync(channel, cancellationToken);
 
         var body = JsonSerializer.SerializeToUtf8Bytes(message);
@@ -24,7 +24,7 @@ public sealed class RabbitMqReportJobPublisher(IConnectionFactory connectionFact
         await channel.BasicPublishAsync(
             exchange: RabbitMqReportJobTopology.ExchangeName,
             routingKey: RabbitMqReportJobTopology.RoutingKey,
-            mandatory: false,
+            mandatory: true,
             basicProperties: properties,
             body: body,
             cancellationToken: cancellationToken);

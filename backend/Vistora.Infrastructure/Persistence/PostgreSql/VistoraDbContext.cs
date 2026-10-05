@@ -11,6 +11,8 @@ public sealed class VistoraDbContext(
     private readonly ITenantContext _tenantContext = tenantContext;
     private Guid? CurrentOrganizationId => _tenantContext.OrganizationId;
 
+    public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<Organization> Organizations => Set<Organization>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Account> Accounts => Set<Account>();
@@ -47,6 +49,19 @@ public sealed class VistoraDbContext(
         ConfigureTenantEntity<AuditEvent>(modelBuilder, "audit_events");
         ConfigureTenantEntity<ReportJob>(modelBuilder, "report_jobs");
         ConfigureTenantEntity<InspectionAcceptance>(modelBuilder, "inspection_acceptances");
+        ConfigureTenantEntity<IdempotencyRecord>(modelBuilder, "idempotency_records");
+        ConfigureTenantEntity<OutboxMessage>(modelBuilder, "outbox_messages");
+        modelBuilder.Entity<IdempotencyRecord>(entity =>
+        {
+            entity.Property(x => x.KeyHash).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.RequestHash).HasMaxLength(64).IsRequired();
+            entity.HasIndex(x => new { x.OrganizationId, x.KeyHash }).IsUnique();
+        });
+        modelBuilder.Entity<OutboxMessage>(entity =>
+        {
+            entity.Property(x => x.Type).HasMaxLength(128).IsRequired();
+            entity.HasIndex(x => new { x.OrganizationId, x.PublishedAtUtc, x.CreatedAtUtc });
+        });
         ConfigureRowVersionedEntities(modelBuilder);
 
         modelBuilder.Entity<User>(entity =>
@@ -244,7 +259,7 @@ public sealed class VistoraDbContext(
             entity.ToTable(tableName);
             entity.HasKey("Id");
             entity.Property(x => x.OrganizationId).HasColumnName("organization_id").IsRequired();
-            entity.HasQueryFilter(x => CurrentOrganizationId.HasValue && x.OrganizationId == CurrentOrganizationId.Value);
+            entity.HasQueryFilter(x => CurrentOrganizationId.HasValue && x.OrganizationId == CurrentOrganizationId);
             entity.HasIndex(x => x.OrganizationId);
         });
     }

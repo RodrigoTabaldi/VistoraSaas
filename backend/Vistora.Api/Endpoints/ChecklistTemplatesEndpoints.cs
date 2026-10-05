@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -53,7 +54,7 @@ public static class ChecklistTemplatesEndpoints
         [FromServices] ITenantContext tenantContext,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(idempotencyKey))
+        if (string.IsNullOrWhiteSpace(idempotencyKey) || idempotencyKey.Length > 200)
         {
             return Results.BadRequest(new { error = "Header 'Idempotency-Key' is required." });
         }
@@ -82,11 +83,11 @@ public static class ChecklistTemplatesEndpoints
             organizationId,
             idempotencyKey,
             async () => await useCase.ExecuteAsync(request.Name, roomsInput, cancellationToken),
-            cancellationToken);
+            cancellationToken, "checklist.create", JsonSerializer.Serialize(request));
 
         if (outcome.Kind == IdempotencyResultKind.Conflict)
         {
-            return Results.Conflict(new { error = "An operation with this Idempotency-Key is currently in progress." });
+            return Results.Conflict(new { error = "Operation is in progress or the Idempotency-Key was reused with different data." });
         }
 
         var id = outcome.Result;
@@ -173,17 +174,18 @@ public static class ChecklistTemplatesEndpoints
         [FromServices] ITenantContext tenantContext,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(idempotencyKey))
+        if (string.IsNullOrWhiteSpace(idempotencyKey) || idempotencyKey.Length > 200)
         {
             return Results.BadRequest(new { error = "Header 'Idempotency-Key' is required." });
         }
 
-        if (request is null || request.UnitId == Guid.Empty || request.ChecklistTemplateId == Guid.Empty)
+        if (request is null || ((request.UnitId == Guid.Empty) == (request.Location is null)) ||
+            (request.Location is not null && !request.Location.IsValid()))
         {
-            return Results.BadRequest(new { error = "UnitId and ChecklistTemplateId are required." });
+            return Results.BadRequest(new { error = "Selecione uma unidade ou informe um endereço válido e um checklist. Endereço: até 1000 caracteres; nome: até 200; unidade: até 100. Sem nome, o endereço deve ter até 200 caracteres." });
         }
 
-        if (!Enum.TryParse<InspectionType>(request.Type, true, out var inspectionType))
+        if (!Enum.TryParse<InspectionType>(request.Type, true, out var inspectionType) || !Enum.IsDefined(inspectionType))
         {
             return Results.BadRequest(new { error = $"Invalid inspection type '{request.Type}'. Allowed values: MoveIn, MoveOut." });
         }
@@ -198,12 +200,12 @@ public static class ChecklistTemplatesEndpoints
         var outcome = await idempotencyGuard.ExecuteAsync(
             organizationId,
             idempotencyKey,
-            async () => await useCase.ExecuteAsync(request.UnitId, request.ChecklistTemplateId, inspectionType, cancellationToken, request.ScheduledAtUtc),
-            cancellationToken);
+            async () => await useCase.ExecuteAsync(request.UnitId, request.ChecklistTemplateId, inspectionType, cancellationToken, request.ScheduledAtUtc, request.Location),
+            cancellationToken, "inspection.create", JsonSerializer.Serialize(request));
 
         if (outcome.Kind == IdempotencyResultKind.Conflict)
         {
-            return Results.Conflict(new { error = "An operation with this Idempotency-Key is currently in progress." });
+            return Results.Conflict(new { error = "Operation is in progress or the Idempotency-Key was reused with different data." });
         }
 
         return outcome.Result switch
@@ -245,4 +247,5 @@ public sealed record CreateInspectionRequest(
     Guid UnitId,
     Guid ChecklistTemplateId,
     string Type,
-    DateTimeOffset? ScheduledAtUtc = null);
+    DateTimeOffset? ScheduledAtUtc = null,
+    QuickInspectionLocation? Location = null);

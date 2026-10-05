@@ -16,13 +16,13 @@ public sealed class RabbitMqMessageBus(
     public async Task PublishAsync(MessageEnvelope message, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
-        await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
+        await using var channel = await connection.CreateChannelAsync(new CreateChannelOptions(publisherConfirmationsEnabled: true, publisherConfirmationTrackingEnabled: true), cancellationToken);
         await channel.QueueDeclareAsync(_options.QueueName, durable: true, exclusive: false, autoDelete: false,
             arguments: null, cancellationToken: cancellationToken);
 
         var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(message, JsonOptions));
         var properties = new BasicProperties { Persistent = true, ContentType = "application/json" };
-        await channel.BasicPublishAsync(string.Empty, _options.QueueName, mandatory: false, properties, body,
+        await channel.BasicPublishAsync(string.Empty, _options.QueueName, mandatory: true, properties, body,
             cancellationToken);
     }
 }
