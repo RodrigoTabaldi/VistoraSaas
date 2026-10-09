@@ -18,6 +18,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ConnectionStrings__Postgres: ${VISTORA_POSTGRES_CONNECTION:-Host=postgres;Port=5432;Database=vistora;Username=vistora_app;Password=change-me}
+      Database__MaximumPoolSize: ${VISTORA_API_DB_POOL_SIZE:-30}
+      Database__ApplicationName: vistora-api
       ConnectionStrings__PostgresMigration: ${VISTORA_POSTGRES_MIGRATION_CONNECTION:-Host=postgres;Port=5432;Database=vistora;Username=vistora;Password=change-me}
       ConnectionStrings__Redis: ${VISTORA_REDIS_CONNECTION:-redis:6379}
       ConnectionStrings__RabbitMq: ${VISTORA_RABBITMQ_CONNECTION:-amqp://vistora:change-me@rabbitmq:5672/}
@@ -58,6 +60,8 @@ services:
     environment:
       DOTNET_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ConnectionStrings__Postgres: ${VISTORA_POSTGRES_CONNECTION:-Host=postgres;Port=5432;Database=vistora;Username=vistora_app;Password=change-me}
+      Database__MaximumPoolSize: ${VISTORA_WORKER_DB_POOL_SIZE:-10}
+      Database__ApplicationName: vistora-worker
       ConnectionStrings__Redis: ${VISTORA_REDIS_CONNECTION:-redis:6379}
       ConnectionStrings__RabbitMq: ${VISTORA_RABBITMQ_CONNECTION:-amqp://vistora:change-me@rabbitmq:5672/}
       Messaging__RabbitMq__QueueName: ${VISTORA_RABBITMQ_QUEUE:-vistora.messages}

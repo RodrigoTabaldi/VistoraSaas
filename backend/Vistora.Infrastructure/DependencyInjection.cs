@@ -32,6 +32,8 @@ using Amazon.S3;
               throw new InvalidOperationException("ConnectionStrings:Postgres must be configured.");
           }
 
+          connectionString = PostgreSqlConnectionConfiguration.Build(connectionString, configuration);
+
           services.AddScoped<TenantContext>();
           services.AddScoped<ITenantContext>(serviceProvider =>
               serviceProvider.GetRequiredService<TenantContext>());
